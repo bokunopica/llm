@@ -144,6 +144,7 @@ def main():
             args.model_name_or_path,
             torch_dtype=torch.float16 if args.fp16 else torch.float32,
         )
+        print(model)
         model = prepare_model_for_kbit_training(model)
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()  # 打印可训练参数占比

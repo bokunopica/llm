@@ -132,6 +132,9 @@ class TrainLlavaModelCollator:
         self.processor = processor
         self.ignore_index = ignore_index
         self.system_prompt = system_prompt or "You are a helpful assistant."
+        if not hasattr(self.processor, 'patch_size') or self.processor.patch_size is None:
+            self.processor.patch_size = 14  # LLaVA 通常使用的 patch_size 值
+        
 
     def convert_sample(
         self,
@@ -172,8 +175,8 @@ class TrainLlavaModelCollator:
                 prompt = f"{self.system_prompt}\n{query}"
 
             image = Image.open(image_path).convert("RGB")
-            processor.image_processor.patch_size = 14  # 如果模型是基于 ViT 或类似结构
-            print("Patch size:", self.processor.image_processor.patch_size)
+            self.processor.image_processor.patch_size = 14  # 如果模型是基于 ViT 或类似结构
+            # print("Patch size:", self.processor.image_processor.patch_size)
             model_inputs = self.processor(image, prompt, return_tensors="pt")
             answer_ids = self.processor.tokenizer(
                 answer,
