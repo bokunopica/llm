@@ -11,7 +11,6 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-import wandb
 from data import LIDCClassificationDataset, TrainLlavaModelCollator
 
 # 设置日志
@@ -81,16 +80,13 @@ def parse_args():
         help="系统提示语",
     )
     parser.add_argument(
-        "--use_wandb", action="store_true", help="是否使用wandb进行实验跟踪"
+        "--use_tensorboard", action="store_true", help="是否使用tensorboard进行实验跟踪"
     )
     parser.add_argument(
-        "--wandb_project",
+        "--tensorboard_dir",
         type=str,
-        default="llava-finetune",
-        help="Weights & Biases项目名称",
-    )
-    parser.add_argument(
-        "--wandb_run_name", type=str, default=None, help="Weights & Biases运行名称"
+        default=None,
+        help="Tensorboard日志目录，若为None则使用output_dir/runs",
     )
     parser.add_argument(
         "--lora", action="store_true", help="是否使用LoRA进行参数高效微调"
@@ -101,6 +97,10 @@ def parse_args():
 
     if args.output_dir is not None:
         os.makedirs(args.output_dir, exist_ok=True)
+    
+    # 如果没有指定tensorboard目录，则设置默认目录
+    if args.use_tensorboard and args.tensorboard_dir is None:
+        args.tensorboard_dir = os.path.join(args.output_dir, "runs")
 
     return args
 
@@ -110,14 +110,6 @@ def main():
 
     # 设置随机种子
     set_seed(args.seed)
-
-    # 设置wandb
-    if args.use_wandb:
-        wandb.init(
-            project=args.wandb_project,
-            name=args.wandb_run_name,
-            config=vars(args),
-        )
 
     # 加载处理器和模型
     logger.info(f"加载处理器和模型: {args.model_name_or_path}")
@@ -174,6 +166,11 @@ def main():
         processor=processor, system_prompt=args.system_prompt
     )
 
+    # 创建tensorboard日志目录
+    if args.use_tensorboard:
+        os.makedirs(args.tensorboard_dir, exist_ok=True)
+        logger.info(f"Tensorboard日志将保存到 {args.tensorboard_dir}")
+
     # 训练参数
     training_args = TrainingArguments(
         output_dir=args.output_dir,
@@ -185,13 +182,14 @@ def main():
         warmup_steps=args.warmup_steps,
         weight_decay=args.weight_decay,
         logging_steps=args.logging_steps,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=args.eval_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
         load_best_model_at_end=True,
         fp16=args.fp16,
-        report_to="wandb" if args.use_wandb else None,
+        report_to="tensorboard" if args.use_tensorboard else "none",
+        logging_dir=args.tensorboard_dir if args.use_tensorboard else None,
         push_to_hub=False,
     )
 
@@ -212,10 +210,6 @@ def main():
     logger.info(f"保存模型到 {args.output_dir}")
     trainer.save_model()
     processor.save_pretrained(args.output_dir)
-
-    # 关闭wandb
-    if args.use_wandb:
-        wandb.finish()
 
 
 if __name__ == "__main__":
