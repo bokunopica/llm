@@ -1,191 +1,222 @@
-import copy
-import logging
 import os
-from dataclasses import dataclass, field
-from functools import partial
-from typing import Dict, List, Optional, Sequence, Union
-
+import argparse
+import logging
+from pathlib import Path
 import torch
-import transformers
-from torch.utils.data import Dataset
-from tqdm import tqdm
+from torch.utils.data import DataLoader
 from transformers import (
+    AutoModelForVision2Seq,
     AutoProcessor,
-    DataCollatorForSeq2Seq,
-    LlavaForConditionalGeneration,
-    LlavaProcessor,
     Trainer,
     TrainingArguments,
-    LlavaNextForConditionalGeneration,
-    LlavaNextProcessor,
+    set_seed,
 )
+import wandb
+from data import LIDCClassificationDataset, TrainLlavaModelCollator
 
-# from custom_trainer import WebTrainer
-from data import LlavaDataset, TrainLlavaModelCollator, LIDCClassificationDataset
-
-# from train_llava.data_websend import DatasetReceiveByWeb, TrainLlavaModelCollatorByWeb
-from util import print_trainable_parameters
-
+# 设置日志
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    level=logging.INFO,
+)
 logger = logging.getLogger(__name__)
 
-# If using LlavaInsight
-from modeling_llava_insight import LlavaInsight, LlavaInsightProcessor
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="微调图像文本到文本模型")
 
-@dataclass
-class ModelArguments:
-    model_name_or_path: Optional[str] = field(default="test_model/model001")
-    model_class: Optional[str] = field(default="LlavaForConditionalGeneration", metadata={
-        "help": "Choose model class. Options: LlavaForConditionalGeneration, LlavaInsight."
-    })
-    train_type: Optional[str] = field(
-        default="none",
-        metadata={
-            "help": """
-            1. use_lora:使用lora训练,
-            2. none:全量参数训练;
-            3. freeze_vision:只冻结vision_tower进行训练
-            4. train_projector:只训练投影层
-            """
-        },
+    parser.add_argument(
+        "--model_name_or_path",
+        type=str,
+        default="llava-hf/llava-1.5-7b-hf",
+        help="要微调的预训练模型路径或名称",
     )
-    # use_patches: bool = field(
-    #     default=False,
-    #     metadata={
-    #         "help": "Whether to use patches in the model. If True, num_patches must be specified."
-    #     },
-    # )
-    # num_patches: int = field(
-    #     default=0,
-    #     metadata={
-    #         "help": "Number of patches to use in the model. Required if use_patches is True."
-    #     },
-    # )
-
-
-@dataclass
-class DataArguments:
-    data_path: str = field(
-        default=None, metadata={"help": "Path to the training data."}
+    parser.add_argument(
+        "--dataset_dir",
+        type=str,
+        required=True,
+        help="数据集目录，应包含train.jsonl和test.jsonl",
     )
-    # source_length: int = field(default=128)
-    # target_length: int = field(default=512)
-
-
-def load_model_processor(modelargs: ModelArguments):
-    init_kwargs = {}
-    if modelargs.model_class == "LlavaInsight":
-        # Use LlavaInsight model and processor
-        model_cls = LlavaInsight
-        processor_cls = LlavaInsightProcessor
-        init_kwargs['use_patches'] = modelargs.use_patches
-        init_kwargs['num_patches'] = modelargs.num_patches
-    elif modelargs.model_class == "LlavaNextForConditionalGeneration":
-        # Use LlavaNext model and processor
-        model_cls = LlavaNextForConditionalGeneration
-        processor_cls = LlavaNextProcessor
-        # init_kwargs['use_patches'] = modelargs.use_patches
-        # init_kwargs['num_patches'] = modelargs.num_patches
-    else:
-        # Default to LlavaForConditionalGeneration
-        model_cls = LlavaForConditionalGeneration
-        processor_cls = LlavaProcessor
-
-    # Load the model with the selected class
-    model = model_cls.from_pretrained(
-        modelargs.model_name_or_path,
-        torch_dtype=torch.bfloat16,
-        low_cpu_mem_usage=True,
-        **init_kwargs,
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="./results",
+        help="输出目录，用于保存模型和训练记录",
     )
-
-    # Load the processor
-    processor = processor_cls.from_pretrained(
-        modelargs.model_name_or_path,
-        patch_size=model.vision_tower.config.patch_size,
-        **init_kwargs,
+    parser.add_argument(
+        "--num_train_epochs",
+        type=float,
+        default=3.0,
+        help="训练的总轮次",
     )
+    parser.add_argument(
+        "--per_device_train_batch_size",
+        type=int,
+        default=4,
+        help="每个设备的训练批次大小",
+    )
+    parser.add_argument(
+        "--per_device_eval_batch_size",
+        type=int,
+        default=4,
+        help="每个设备的评估批次大小",
+    )
+    parser.add_argument(
+        "--gradient_accumulation_steps", type=int, default=1, help="梯度累积步数"
+    )
+    parser.add_argument("--learning_rate", type=float, default=5e-5, help="初始学习率")
+    parser.add_argument("--warmup_steps", type=int, default=0, help="学习率预热的步数")
+    parser.add_argument("--weight_decay", type=float, default=0.0, help="权重衰减")
+    parser.add_argument(
+        "--logging_steps", type=int, default=10, help="日志记录步数间隔"
+    )
+    parser.add_argument("--eval_steps", type=int, default=500, help="评估间隔步数")
+    parser.add_argument("--save_steps", type=int, default=500, help="模型保存间隔步数")
+    parser.add_argument("--seed", type=int, default=42, help="随机种子")
+    parser.add_argument(
+        "--system_prompt",
+        type=str,
+        default="You are a helpful medical assistant.",
+        help="系统提示语",
+    )
+    parser.add_argument(
+        "--use_wandb", action="store_true", help="是否使用wandb进行实验跟踪"
+    )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default="llava-finetune",
+        help="Weights & Biases项目名称",
+    )
+    parser.add_argument(
+        "--wandb_run_name", type=str, default=None, help="Weights & Biases运行名称"
+    )
+    parser.add_argument(
+        "--lora", action="store_true", help="是否使用LoRA进行参数高效微调"
+    )
+    parser.add_argument("--fp16", action="store_true", help="是否使用混合精度训练")
 
-    processor.patch_size = getattr(model.vision_tower.config, "patch_size", 14)
-    processor.vision_feature_select_strategy = getattr(model.config, "vision_feature_select_strategy", "default")
+    args = parser.parse_args()
+
+    if args.output_dir is not None:
+        os.makedirs(args.output_dir, exist_ok=True)
+
+    return args
 
 
-    # Apply training strategy (LoRA, freeze vision, etc.)
-    if modelargs.train_type == "use_lora":
-        logging.warning("Loading model with LoRA")
+def main():
+    args = parse_args()
 
-        from peft import LoraConfig, get_peft_model
+    # 设置随机种子
+    set_seed(args.seed)
 
-        config = LoraConfig(
-            r=16,
-            lora_dropout=0.05,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-            bias="none",
-            task_type="CAUSAL_LM",
-            modules_to_save=["multi_modal_projector"],
+    # 设置wandb
+    if args.use_wandb:
+        wandb.init(
+            project=args.wandb_project,
+            name=args.wandb_run_name,
+            config=vars(args),
         )
-        model = get_peft_model(model, config)
 
-    elif modelargs.train_type == "none":
-        logging.warning("Training all parameters")
+    # 加载处理器和模型
+    logger.info(f"加载处理器和模型: {args.model_name_or_path}")
+    processor = AutoProcessor.from_pretrained(args.model_name_or_path)
 
-    elif modelargs.train_type == "freeze_vision":
-        logging.warning("Freezing vision_tower parameters")
-        for param in model.vision_tower.parameters():
-            param.requires_grad = False
+    # 准备用于LoRA微调的配置
+    if args.lora:
+        from peft import (
+            LoraConfig,
+            get_peft_model,
+            TaskType,
+            prepare_model_for_kbit_training,
+        )
 
-    elif modelargs.train_type == "train_projector":
-        logging.warning("Freezing all but the projector parameters")
-        for param in model.vision_tower.parameters():
-            param.requires_grad = False
-        for param in model.language_model.parameters():
-            param.requires_grad = False
+        lora_config = LoraConfig(
+            r=16,  # LoRA的秩
+            lora_alpha=32,  # LoRA的alpha参数
+            target_modules=[
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+            ],  # 需要微调的模块名称
+            lora_dropout=0.05,  # LoRA的dropout率
+            bias="none",  # 是否对偏置进行微调
+            task_type=TaskType.CAUSAL_LM,  # 任务类型
+        )
 
-    print_trainable_parameters(model)
-    # processor.patch_size = model.vision_tower.config.patch_size
-    # processor.vision_feature_select_strategy = model.config.vision_feature_select_strategy
+        # 加载模型，并应用LoRA配置
+        logger.info("加载基础模型并应用LoRA配置")
+        model = AutoModelForVision2Seq.from_pretrained(
+            args.model_name_or_path,
+            torch_dtype=torch.float16 if args.fp16 else torch.float32,
+        )
+        model = prepare_model_for_kbit_training(model)
+        model = get_peft_model(model, lora_config)
+        model.print_trainable_parameters()  # 打印可训练参数占比
+    else:
+        # 常规加载模型
+        model = AutoModelForVision2Seq.from_pretrained(
+            args.model_name_or_path,
+            torch_dtype=torch.float16 if args.fp16 else torch.float32,
+        )
 
+    # 加载数据集
+    logger.info(f"加载数据集: {args.dataset_dir}")
+    train_dataset = LIDCClassificationDataset(args.dataset_dir, is_train=True)
+    eval_dataset = LIDCClassificationDataset(args.dataset_dir, is_train=False)
 
-    return model, processor
+    logger.info(f"训练集大小: {len(train_dataset)}, 评估集大小: {len(eval_dataset)}")
 
-
-def load_dataset_collator(processor, dataargs: DataArguments):
-    llava_dataset = LIDCClassificationDataset(
-        dataargs.data_path  # Example: "data/LIDC_train_data"
-    )
+    # 数据整理器
     data_collator = TrainLlavaModelCollator(
-        processor,
-        -100,
-        'You are a medical image assistant specializing in lung CT scans. Based on the image, determine whether the lung nodule is malignant or benign. Respond with only one word: \"malignant\" or \"benign\". Do not explain your answer.'
+        processor=processor, system_prompt=args.system_prompt
     )
-    return llava_dataset, data_collator
 
-
-def train():
-    parser = transformers.HfArgumentParser(
-        (ModelArguments, DataArguments, TrainingArguments)
+    # 训练参数
+    training_args = TrainingArguments(
+        output_dir=args.output_dir,
+        num_train_epochs=args.num_train_epochs,
+        per_device_train_batch_size=args.per_device_train_batch_size,
+        per_device_eval_batch_size=args.per_device_eval_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        learning_rate=args.learning_rate,
+        warmup_steps=args.warmup_steps,
+        weight_decay=args.weight_decay,
+        logging_steps=args.logging_steps,
+        evaluation_strategy="steps",
+        eval_steps=args.eval_steps,
+        save_strategy="steps",
+        save_steps=args.save_steps,
+        load_best_model_at_end=True,
+        fp16=args.fp16,
+        report_to="wandb" if args.use_wandb else None,
+        push_to_hub=False,
     )
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-    model, processor = load_model_processor(model_args)
-    train_dataset, data_collator = load_dataset_collator(processor, data_args)
 
+    # 初始化Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=None,
+        eval_dataset=eval_dataset,
         data_collator=data_collator,
     )
 
+    # 开始训练
+    logger.info("开始训练...")
     trainer.train()
-    trainer.save_state()
-    trainer.save_model(output_dir=training_args.output_dir)
+
+    # 保存最终模型
+    logger.info(f"保存模型到 {args.output_dir}")
+    trainer.save_model()
+    processor.save_pretrained(args.output_dir)
+
+    # 关闭wandb
+    if args.use_wandb:
+        wandb.finish()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        level=logging.INFO,
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    train()
+    main()
