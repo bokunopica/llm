@@ -1,7 +1,6 @@
 import os
 import argparse
 import logging
-from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 from transformers import (
@@ -20,7 +19,6 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="微调图像文本到文本模型")
@@ -88,10 +86,63 @@ def parse_args():
         default=None,
         help="Tensorboard日志目录，若为None则使用output_dir/runs",
     )
+    
+    # 训练策略相关参数
     parser.add_argument(
-        "--lora", action="store_true", help="是否使用LoRA进行参数高效微调"
+        "--train_type",
+        type=str,
+        default="lora_with_projector",
+        choices=["full", "lora", "lora_with_projector", "projector_only", "freeze_vision"],
+        help="训练策略：full(全量), lora(仅LoRA), lora_with_projector(LoRA+投影层), projector_only(仅投影层), freeze_vision(冻结视觉层)",
     )
-    parser.add_argument("--fp16", action="store_true", help="是否使用混合精度训练")
+    parser.add_argument("--fp16", action="store_true", help="是否使用fp16混合精度训练")
+    parser.add_argument("--bf16", action="store_true", help="是否使用bf16混合精度训练")
+    
+    # LoRA 相关参数
+    parser.add_argument("--lora_r", type=int, default=16, help="LoRA的秩")
+    parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA的alpha参数")
+    parser.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA的dropout率")
+    parser.add_argument(
+        "--lora_target_modules",
+        type=str,
+        nargs='+',
+        default=["q_proj", "k_proj", "v_proj", "o_proj"],
+        help="LoRA目标模块列表",
+    )
+    parser.add_argument(
+        "--save_total_limit", 
+        type=int, 
+        default=1, 
+        help="保存检查点的数量限制，超过限制会删除旧的检查点"
+    )
+    parser.add_argument(
+        "--load_best_model_at_end", 
+        action="store_true", 
+        help="训练结束时加载最佳模型"
+    )
+    parser.add_argument(
+        "--metric_for_best_model", 
+        type=str, 
+        default="eval_loss", 
+        help="用于确定最佳模型的指标"
+    )
+    parser.add_argument(
+        "--greater_is_better", 
+        action="store_true", 
+        help="指标值越大越好（如accuracy），否则越小越好（如loss）"
+    )
+    parser.add_argument(
+        "--deepspeed", 
+        type=str, 
+        default=None, 
+        help="DeepSpeed配置文件路径"
+    )
+    parser.add_argument(
+        "--local_rank", 
+        type=int, 
+        default=-1, 
+        help="本地进程rank，用于分布式训练"
+    )
 
     args = parser.parse_args()
 
@@ -105,55 +156,124 @@ def parse_args():
     return args
 
 
+def setup_model_training(model, args):
+    """根据训练类型配置模型"""
+    
+    if args.train_type == "full":
+        logger.info("使用全量参数进行训练")
+        return model
+        
+    elif args.train_type == "lora":
+        logger.info("使用LoRA进行参数高效微调（不包含投影层）")
+        from peft import LoraConfig, get_peft_model, TaskType
+        
+        lora_config = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            target_modules=args.lora_target_modules,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM,
+        )
+        model = get_peft_model(model, lora_config)
+        
+    elif args.train_type == "lora_with_projector":
+        logger.info("使用LoRA + 多模态投影层进行微调")
+        from peft import LoraConfig, get_peft_model, TaskType
+        
+        lora_config = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            target_modules=args.lora_target_modules,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM,
+            modules_to_save=["multi_modal_projector"],  # 同时训练投影层
+        )
+        model = get_peft_model(model, lora_config)
+        
+    elif args.train_type == "projector_only":
+        logger.info("仅训练多模态投影层，冻结其他参数")
+        # 冻结所有参数
+        for param in model.parameters():
+            param.requires_grad = False
+        
+        # 解冻投影层
+        if hasattr(model, 'multi_modal_projector'):
+            for param in model.multi_modal_projector.parameters():
+                param.requires_grad = True
+        else:
+            logger.warning("未找到multi_modal_projector层")
+            
+    elif args.train_type == "freeze_vision":
+        logger.info("冻结视觉编码器，训练语言模型和投影层")
+        # 冻结视觉编码器
+        if hasattr(model, 'vision_tower'):
+            for param in model.vision_tower.parameters():
+                param.requires_grad = False
+        else:
+            logger.warning("未找到vision_tower层")
+    
+    return model
+
+
+def print_trainable_parameters(model):
+    """打印可训练参数统计"""
+    trainable_params = 0
+    all_param = 0
+    
+    for name, param in model.named_parameters():
+        all_param += param.numel()
+        if param.requires_grad:
+            trainable_params += param.numel()
+            
+    logger.info(f"可训练参数: {trainable_params:,} || 总参数: {all_param:,} || 可训练比例: {100 * trainable_params / all_param:.4f}%")
+    
+    # 打印具体哪些层是可训练的
+    trainable_layers = []
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            trainable_layers.append(name)
+    
+    if len(trainable_layers) <= 20:  # 如果层数不多，打印所有层
+        logger.info("可训练的层:")
+        for layer in trainable_layers:
+            logger.info(f"  - {layer}")
+    else:  # 如果层数很多，只打印前10个和后10个
+        logger.info("可训练的层（前10个和后10个）:")
+        for layer in trainable_layers[:10]:
+            logger.info(f"  - {layer}")
+        logger.info("  ...")
+        for layer in trainable_layers[-10:]:
+            logger.info(f"  - {layer}")
+
 def main():
     args = parse_args()
-
+    
     # 设置随机种子
     set_seed(args.seed)
 
     # 加载处理器和模型
     logger.info(f"加载处理器和模型: {args.model_name_or_path}")
     processor = AutoProcessor.from_pretrained(args.model_name_or_path)
+    
+    # 确保处理器有patch_size属性
+    if not hasattr(processor, 'patch_size') or processor.patch_size is None:
+        processor.patch_size = 14
 
-    # 准备用于LoRA微调的配置
-    if args.lora:
-        from peft import (
-            LoraConfig,
-            get_peft_model,
-            TaskType,
-            prepare_model_for_kbit_training,
-        )
+    # 加载模型
+    logger.info("加载基础模型")
+    model = AutoModelForVision2Seq.from_pretrained(
+        args.model_name_or_path,
+        torch_dtype=torch.float16 if args.fp16 or args.deepspeed else torch.float32,
+        low_cpu_mem_usage=True,
+    )
 
-        lora_config = LoraConfig(
-            r=16,  # LoRA的秩
-            lora_alpha=32,  # LoRA的alpha参数
-            target_modules=[
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "o_proj",
-            ],  # 需要微调的模块名称
-            lora_dropout=0.05,  # LoRA的dropout率
-            bias="none",  # 是否对偏置进行微调
-            task_type=TaskType.CAUSAL_LM,  # 任务类型
-        )
-
-        # 加载模型，并应用LoRA配置
-        logger.info("加载基础模型并应用LoRA配置")
-        model = AutoModelForVision2Seq.from_pretrained(
-            args.model_name_or_path,
-            torch_dtype=torch.float16 if args.fp16 else torch.float32,
-        )
-        print(model)
-        model = prepare_model_for_kbit_training(model)
-        model = get_peft_model(model, lora_config)
-        model.print_trainable_parameters()  # 打印可训练参数占比
-    else:
-        # 常规加载模型
-        model = AutoModelForVision2Seq.from_pretrained(
-            args.model_name_or_path,
-            torch_dtype=torch.float16 if args.fp16 else torch.float32,
-        )
+    # 根据训练类型配置模型
+    model = setup_model_training(model, args)
+    
+    # 打印可训练参数统计
+    print_trainable_parameters(model)
 
     # 加载数据集
     logger.info(f"加载数据集: {args.dataset_dir}")
@@ -187,11 +307,18 @@ def main():
         eval_steps=args.eval_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
-        load_best_model_at_end=True,
-        fp16=args.fp16,
+        save_total_limit=args.save_total_limit,
+        load_best_model_at_end=args.load_best_model_at_end,
+        metric_for_best_model=args.metric_for_best_model,
+        greater_is_better=args.greater_is_better,
+        fp16=args.fp16 if not args.deepspeed else False,  # DeepSpeed配置中处理FP16
+        bf16=args.bf16 if not args.deepspeed else False,
+        deepspeed=args.deepspeed,  # DeepSpeed配置文件
         report_to="tensorboard" if args.use_tensorboard else "none",
         logging_dir=args.tensorboard_dir if args.use_tensorboard else None,
         push_to_hub=False,
+        dataloader_num_workers=0,
+        remove_unused_columns=False,
     )
 
     # 初始化Trainer
@@ -211,7 +338,6 @@ def main():
     logger.info(f"保存模型到 {args.output_dir}")
     trainer.save_model()
     processor.save_pretrained(args.output_dir)
-
 
 if __name__ == "__main__":
     main()
