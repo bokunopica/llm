@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 定义公共变量
-MODEL_PATH="/home/pico/model/llava-1.5-7b-hf"
+MODEL_PATH="/home/qianq/model/llava-1.5-7b-hf"
 DATASET_DIR="data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
 OUTPUT_DIR="./results/llava-1.5-7b-hf-projector-only"
 TENSORBOARD_DIR="${OUTPUT_DIR}/tensorboard"
@@ -18,7 +18,7 @@ SAVE_STEPS="500"
 LOGGING_STEPS="20"
 
 # 使用DeepSpeed进行训练
-deepspeed --num_gpus=1 finetune.py \
+CUDA_VISIBLE_DEVICES=1,3 deepspeed --num_gpus=2 finetune.py \
   --fp16 \
   --dataset_dir "${DATASET_DIR}" \
   --output_dir "${OUTPUT_DIR}" \
