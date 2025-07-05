@@ -68,7 +68,7 @@ def main():
 
     # 创建输出目录
     os.makedirs(args.output_dir, exist_ok=True)
-    output_file = os.path.join(args.output_dir, f"{dataset_type}_results.txt")
+    output_file = os.path.join(args.output_dir, f"{dataset_type}_results.jsonl")
 
     # 推理
     print("开始推理...")
@@ -82,7 +82,7 @@ def main():
                 {"role": "system", "content": args.system_prompt},
                 {"role": "user", "content": query}
             ]
-            print('messages:', messages)
+            # print('messages:', messages)
             
             # prompt = processor.tokenizer.apply_chat_template(
             #     messages,
@@ -95,7 +95,7 @@ def main():
             image = Image.open(image_path).convert("RGB")
             
             # 处理输入
-            print('promt:', prompt)
+            # print('promt:', prompt)
             inputs = processor(
                 text=prompt,
                 images=image,
@@ -122,7 +122,7 @@ def main():
             else:
                 generate_kwargs["do_sample"] = False
             
-            print('before generate')
+            # print('before generate')
             outputs = model.generate(
                 **inputs,
                 **generate_kwargs
@@ -148,7 +148,10 @@ def main():
     print(f"保存推理结果到 {output_file}")
     with open(output_file, "w", encoding="utf-8") as f:
         for text in results:
-            f.write(text + "\n")
+            # 清洗一下数据，只要最后的bengin和malignant 
+            # <|assistant|>
+            # [malignant]
+            text = text.split("<|assistant|>")[-1].replace("[", "").replace("]", "").strip()
 
     print("推理完成！")
 

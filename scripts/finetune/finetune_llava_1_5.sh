@@ -1,5 +1,5 @@
 #!/bin/bash
-
+CUDA_VISIBLE_DEVICES=2,3
 # 定义公共变量
 MODEL_PATH="/home/qianq/model/llava-1.5-7b-hf"
 DATASET_DIR="data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
@@ -9,16 +9,16 @@ SYSTEM_PROMPT="You are a professional medical imaging analysis assistant."
 DEEPSPEED_CONFIG="ds_config_zero2.json"
 
 # 训练参数
-LEARNING_RATE="1e-3"
-NUM_EPOCHS="3"
-BATCH_SIZE="1"        # DeepSpeed可以处理更小的批次
+LEARNING_RATE="5e-5"
+NUM_EPOCHS="5"
+BATCH_SIZE="2"        # DeepSpeed可以处理更小的批次
 GRAD_ACCUM_STEPS="8"  # 增加梯度累积以补偿小批次
 EVAL_STEPS="500"
 SAVE_STEPS="500"
 LOGGING_STEPS="20"
 
 # 使用DeepSpeed进行训练
-CUDA_VISIBLE_DEVICES=1,3 deepspeed --num_gpus=2 finetune.py \
+deepspeed --include localhost:2,3 finetune.py \
   --fp16 \
   --dataset_dir "${DATASET_DIR}" \
   --output_dir "${OUTPUT_DIR}" \

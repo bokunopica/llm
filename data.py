@@ -222,19 +222,131 @@ class LIDCClassificationDataset(Dataset):
 #         return batch
 
 
+# class TrainLlavaModelCollator:
+#     def __init__(
+#         self,
+#         processor: AutoProcessor,
+#         ignore_index: int = -100,
+#         system_prompt: Optional[str] = None,
+#         debug: bool = False,  # 添加调试标志
+#     ):
+#         self.processor = processor
+#         self.ignore_index = ignore_index
+#         self.system_prompt = system_prompt or "You are a helpful assistant."
+#         self.debug = debug
+#         self.call_count = 0  # 记录调用次数
+#         if (
+#             not hasattr(self.processor, "patch_size")
+#             or self.processor.patch_size is None
+#         ):
+#             self.processor.patch_size = 14
+
+#     def convert_sample(
+#         self,
+#         q_input_ids: torch.Tensor,
+#         a_input_ids: torch.Tensor,
+#     ) -> Tuple[torch.Tensor, torch.Tensor]:
+#         eos_token_id = self.processor.tokenizer.eos_token_id
+#         eos_tensor = torch.tensor([[eos_token_id]], dtype=torch.long)
+#         input_ids = torch.cat([q_input_ids, a_input_ids, eos_tensor], dim=1)
+#         labels = torch.cat(
+#             [
+#                 torch.full_like(q_input_ids, self.ignore_index),
+#                 a_input_ids,
+#                 eos_tensor,
+#             ],
+#             dim=1,
+#         )
+#         return input_ids, labels
+
+#     def __call__(self, features: List[Tuple[str, str, str]]) -> Dict[str, torch.Tensor]:
+#         input_ids_list = []
+#         labels_list = []
+#         pixel_values_list = []
+#         max_length = 0
+
+#         for i, (query, answer, image_path) in enumerate(features):
+#             prompt = f"{self.system_prompt}\n{query}"
+
+#             if self.debug:
+#                 print(f"Generated prompt: {prompt[:200]}...")
+
+#             image = Image.open(image_path).convert("RGB")
+#             self.processor.image_processor.patch_size = 14
+#             model_inputs = self.processor(image, prompt, return_tensors="pt")
+#             answer_ids = self.processor.tokenizer(
+#                 answer,
+#                 return_tensors="pt",
+#                 max_length=2048,
+#                 truncation=True,
+#                 padding=True,
+#             )["input_ids"]
+
+#             if self.debug:
+#                 print(f"Query tokens: {model_inputs['input_ids'].shape}")
+#                 print(f"Answer tokens: {answer_ids.shape}")
+#                 print(f"Query token ids: {model_inputs['input_ids'][0, :20]}")
+#                 print(f"Answer token ids: {answer_ids[0, :20]}")
+
+#                 # 解码部分tokens查看内容
+#                 query_text = self.processor.tokenizer.decode(
+#                     model_inputs["input_ids"][0, :50]
+#                 )
+#                 answer_text = self.processor.tokenizer.decode(answer_ids[0, :50])
+#                 print(f"Query decoded: {query_text}")
+#                 print(f"Answer decoded: {answer_text}")
+
+#             input_ids, labels = self.convert_sample(
+#                 model_inputs["input_ids"], answer_ids
+#             )
+#             input_ids_list.append(input_ids)
+#             labels_list.append(labels)
+#             pixel_values_list.append(model_inputs["pixel_values"])
+#             max_length = max(max_length, input_ids.shape[1])
+
+#         batch_input_ids = []
+#         batch_labels = []
+
+#         for input_ids, labels in zip(input_ids_list, labels_list):
+#             pad_len = max_length - input_ids.shape[1]
+#             pad_input_ids = torch.full(
+#                 (1, pad_len), self.processor.tokenizer.pad_token_id, dtype=torch.long
+#             )
+#             pad_labels = torch.full((1, pad_len), self.ignore_index, dtype=torch.long)
+#             batch_input_ids.append(torch.cat([pad_input_ids, input_ids], dim=1))
+#             batch_labels.append(torch.cat([pad_labels, labels], dim=1))
+
+#         batch = {
+#             "input_ids": torch.cat(batch_input_ids, dim=0),
+#             "labels": torch.cat(batch_labels, dim=0),
+#             "pixel_values": torch.cat(pixel_values_list, dim=0),
+#         }
+#         batch["attention_mask"] = (
+#             batch["input_ids"] != self.processor.tokenizer.pad_token_id
+#         ).long()
+#         return batch
+
+from typing import List, Tuple, Dict, Optional
+import torch
+from PIL import Image
+from transformers import AutoProcessor
+
+
 class TrainLlavaModelCollator:
     def __init__(
         self,
         processor: AutoProcessor,
         ignore_index: int = -100,
         system_prompt: Optional[str] = None,
-        debug: bool = False,  # 添加调试标志
+        debug: bool = False,
     ):
         self.processor = processor
         self.ignore_index = ignore_index
         self.system_prompt = system_prompt or "You are a helpful assistant."
         self.debug = debug
-        self.call_count = 0  # 记录调用次数
+        self.call_count = 0
+
+        # 设置 patch size
         if (
             not hasattr(self.processor, "patch_size")
             or self.processor.patch_size is None
@@ -246,57 +358,44 @@ class TrainLlavaModelCollator:
         q_input_ids: torch.Tensor,
         a_input_ids: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # 保证在同一 device 上构造 eos_tensor
         eos_token_id = self.processor.tokenizer.eos_token_id
-        eos_tensor = torch.tensor([[eos_token_id]], dtype=torch.long)
+        eos_tensor = torch.tensor(
+            [eos_token_id], dtype=torch.long, device=q_input_ids.device
+        ).unsqueeze(0)
+
+        # 检查 answer_ids 是否有非法 token（如超出 vocab 范围）
+        assert (
+            a_input_ids.max() < self.processor.tokenizer.vocab_size
+        ), f"❌ Token ID 超出 vocab 范围：最大 {a_input_ids.max()} >= vocab_size={self.processor.tokenizer.vocab_size}"
+
+        # 拼接输入和标签（问句不参与 loss）
         input_ids = torch.cat([q_input_ids, a_input_ids, eos_tensor], dim=1)
         labels = torch.cat(
-            [
-                torch.full_like(q_input_ids, self.ignore_index),
-                a_input_ids,
-                eos_tensor,
-            ],
+            [torch.full_like(q_input_ids, self.ignore_index), a_input_ids, eos_tensor],
             dim=1,
         )
+
         return input_ids, labels
 
     def __call__(self, features: List[Tuple[str, str, str]]) -> Dict[str, torch.Tensor]:
-        self.call_count += 1
-
-        if self.debug:
-            print(f"\n=== Collator调用 #{self.call_count} ===")
-            print(f"批大小: {len(features)}")
-
         input_ids_list = []
         labels_list = []
         pixel_values_list = []
         max_length = 0
 
         for i, (query, answer, image_path) in enumerate(features):
-            if self.debug:
-                print(f"\n--- 样本 {i} ---")
-                print(f"Query: {query[:100]}...")
-                print(f"Answer: {answer[:100]}...")
-                print(f"Image: {image_path}")
-
-            # messages = [
-            #     {"role": "system", "content": self.system_prompt},
-            #     {"role": "user", "content": query},
-            # ]
-            # try:
-            #     prompt = self.processor.tokenizer.apply_chat_template(
-            #         messages,
-            #         tokenize=False,
-            #         add_generation_prompt=True,
-            #     )
-            # except Exception:
             prompt = f"{self.system_prompt}\n{query}"
 
             if self.debug:
-                print(f"Generated prompt: {prompt[:200]}...")
+                print(f"\n👉 [{i}] Prompt: {prompt[:100]}...")
 
+            # 图像处理
             image = Image.open(image_path).convert("RGB")
             self.processor.image_processor.patch_size = 14
             model_inputs = self.processor(image, prompt, return_tensors="pt")
+
+            # 文本处理
             answer_ids = self.processor.tokenizer(
                 answer,
                 return_tensors="pt",
@@ -306,19 +405,19 @@ class TrainLlavaModelCollator:
             )["input_ids"]
 
             if self.debug:
-                print(f"Query tokens: {model_inputs['input_ids'].shape}")
-                print(f"Answer tokens: {answer_ids.shape}")
-                print(f"Query token ids: {model_inputs['input_ids'][0, :20]}")
-                print(f"Answer token ids: {answer_ids[0, :20]}")
-
-                # 解码部分tokens查看内容
-                query_text = self.processor.tokenizer.decode(
-                    model_inputs["input_ids"][0, :50]
+                print(f"→ query shape: {model_inputs['input_ids'].shape}")
+                print(f"→ answer shape: {answer_ids.shape}")
+                print(f"→ query tokens: {model_inputs['input_ids'][0, :10]}")
+                print(f"→ answer tokens: {answer_ids[0, :10]}")
+                print(
+                    f"→ query decoded: {self.processor.tokenizer.decode(model_inputs['input_ids'][0, :50])}"
                 )
-                answer_text = self.processor.tokenizer.decode(answer_ids[0, :50])
-                print(f"Query decoded: {query_text}")
-                print(f"Answer decoded: {answer_text}")
+                print(
+                    f"→ answer decoded: {self.processor.tokenizer.decode(answer_ids[0, :50])}"
+                )
+                print(f"→ max token ID in answer: {answer_ids.max().item()}")
 
+            # 拼接 input + label
             input_ids, labels = self.convert_sample(
                 model_inputs["input_ids"], answer_ids
             )
@@ -327,57 +426,45 @@ class TrainLlavaModelCollator:
             pixel_values_list.append(model_inputs["pixel_values"])
             max_length = max(max_length, input_ids.shape[1])
 
-        if self.debug:
-            print(f"\n最大长度: {max_length}")
-            print(f"样本长度: {[ids.shape[1] for ids in input_ids_list]}")
-
+        # 统一 pad 成 batch
         batch_input_ids = []
         batch_labels = []
 
         for input_ids, labels in zip(input_ids_list, labels_list):
             pad_len = max_length - input_ids.shape[1]
-            pad_input_ids = torch.full(
-                (1, pad_len), self.processor.tokenizer.pad_token_id, dtype=torch.long
-            )
-            pad_labels = torch.full((1, pad_len), self.ignore_index, dtype=torch.long)
-            batch_input_ids.append(torch.cat([pad_input_ids, input_ids], dim=1))
-            batch_labels.append(torch.cat([pad_labels, labels], dim=1))
 
+            pad_input_ids = torch.full(
+                (1, pad_len),
+                self.processor.tokenizer.pad_token_id,
+                dtype=torch.long,
+                device=input_ids.device,
+            )
+            pad_labels = torch.full(
+                (1, pad_len), self.ignore_index, dtype=torch.long, device=labels.device
+            )
+
+            padded_input_ids = torch.cat([pad_input_ids, input_ids], dim=1)
+            padded_labels = torch.cat([pad_labels, labels], dim=1)
+
+            batch_input_ids.append(padded_input_ids)
+            batch_labels.append(padded_labels)
+
+            if self.debug:
+                print(
+                    f"✅ Padded input shape: {padded_input_ids.shape}, labels shape: {padded_labels.shape}"
+                )
+
+        # 构造 batch 返回
         batch = {
             "input_ids": torch.cat(batch_input_ids, dim=0),
             "labels": torch.cat(batch_labels, dim=0),
             "pixel_values": torch.cat(pixel_values_list, dim=0),
         }
+
+        # Attention mask 自动生成
         batch["attention_mask"] = (
             batch["input_ids"] != self.processor.tokenizer.pad_token_id
         ).long()
-
-        if self.debug:
-            print(f"\n=== 批处理结果 ===")
-            print(f"input_ids shape: {batch['input_ids'].shape}")
-            print(f"labels shape: {batch['labels'].shape}")
-            print(f"pixel_values shape: {batch['pixel_values'].shape}")
-            print(f"attention_mask shape: {batch['attention_mask'].shape}")
-
-            # 检查labels的分布
-            valid_labels = batch["labels"][batch["labels"] != self.ignore_index]
-            print(f"有效标签数量: {len(valid_labels)}")
-            if len(valid_labels) > 0:
-                print(f"标签范围: {valid_labels.min()} - {valid_labels.max()}")
-                print(f"前10个有效标签: {valid_labels[:10]}")
-
-            # 检查是否所有样本的labels都相同
-            for i in range(len(batch["labels"])):
-                valid_labels_i = batch["labels"][i][
-                    batch["labels"][i] != self.ignore_index
-                ]
-                if i == 0:
-                    first_valid_labels = valid_labels_i
-                else:
-                    if torch.equal(valid_labels_i, first_valid_labels):
-                        print(f"WARNING: 样本 {i} 的标签与样本 0 完全相同!")
-                    else:
-                        print(f"样本 {i} 的标签与样本 0 不同 (正常)")
 
         return batch
 
