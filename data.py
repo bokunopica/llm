@@ -10,13 +10,15 @@ from transformers import AutoProcessor
 import os
 import pwd
 from jinja2.exceptions import TemplateError
+import traceback
+import torch.nn.functional as F
 
 
-@dataclass
-class QaImageOutput:
-    q_input_ids: torch.Tensor
-    pixel_values: torch.Tensor
-    a_input_ids: torch.Tensor
+# @dataclass
+# class QaImageOutput:
+#     q_input_ids: torch.Tensor
+#     pixel_values: torch.Tensor
+#     a_input_ids: torch.Tensor
 
 
 class LlavaDataset(Dataset):
@@ -76,50 +78,148 @@ class LIDCClassificationDataset(Dataset):
         return human_input, chatbot_output, image_path
 
 
-def build_qaimage(
-    processor: AutoProcessor,
-    q_text: str,
-    a_text: str,
-    image_path: Path,
-    sys_prompt: str = "You are a helpful assistant.",
-) -> QaImageOutput:
-    messages = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": q_text},
-    ]
-    try:
-        prompt = processor.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-    except TemplateError:
-        messages = [
-            {"role": "user", "content": sys_prompt + "\n" + q_text},
-        ]
-        prompt = processor.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-    except Exception:
-        prompt = f"{sys_prompt}\nUser: {q_text}\nAssistant:"
+# def build_qaimage(
+#     processor: AutoProcessor,
+#     q_text: str,
+#     a_text: str,
+#     image_path: Path,
+#     sys_prompt: str = "You are a helpful assistant.",
+# ) -> QaImageOutput:
+#     messages = [
+#         {"role": "system", "content": sys_prompt},
+#         {"role": "user", "content": q_text},
+#     ]
+#     try:
+#         prompt = processor.tokenizer.apply_chat_template(
+#             messages,
+#             tokenize=False,
+#             add_generation_prompt=True,
+#         )
+#     except TemplateError:
+#         messages = [
+#             {"role": "user", "content": sys_prompt + "\n" + q_text},
+#         ]
+#         prompt = processor.tokenizer.apply_chat_template(
+#             messages,
+#             tokenize=False,
+#             add_generation_prompt=True,
+#         )
+#     except Exception:
+#         prompt = f"{sys_prompt}\nUser: {q_text}\nAssistant:"
 
-    raw_image = Image.open(image_path).convert("RGB")
-    inputs = processor(raw_image, prompt, return_tensors="pt")
-    a_input_ids = processor.tokenizer(
-        a_text,
-        return_tensors="pt",
-        padding="longest",
-        truncation=True,
-        max_length=2048,
-    )["input_ids"]
+#     raw_image = Image.open(image_path).convert("RGB")
+#     inputs = processor(raw_image, prompt, return_tensors="pt")
+#     a_input_ids = processor.tokenizer(
+#         a_text,
+#         return_tensors="pt",
+#         padding="longest",
+#         truncation=True,
+#         max_length=2048,
+#     )["input_ids"]
 
-    return QaImageOutput(
-        q_input_ids=inputs.get("input_ids"),
-        pixel_values=inputs.get("pixel_values"),
-        a_input_ids=a_input_ids,
-    )
+#     return QaImageOutput(
+#         q_input_ids=inputs.get("input_ids"),
+#         pixel_values=inputs.get("pixel_values"),
+#         a_input_ids=a_input_ids,
+#     )
+
+
+# class TrainLlavaModelCollator:
+#     def __init__(
+#         self,
+#         processor: AutoProcessor,
+#         ignore_index: int = -100,
+#         system_prompt: Optional[str] = None,
+#     ):
+#         self.processor = processor
+#         self.ignore_index = ignore_index
+#         self.system_prompt = system_prompt or "You are a helpful assistant."
+#         if not hasattr(self.processor, 'patch_size') or self.processor.patch_size is None:
+#             self.processor.patch_size = 14  # LLaVA 通常使用的 patch_size 值
+
+
+#     def convert_sample(
+#         self,
+#         q_input_ids: torch.Tensor,
+#         a_input_ids: torch.Tensor,
+#     ) -> Tuple[torch.Tensor, torch.Tensor]:
+#         eos_token_id = self.processor.tokenizer.eos_token_id
+#         eos_tensor = torch.tensor([[eos_token_id]], dtype=torch.long)
+#         input_ids = torch.cat([q_input_ids, a_input_ids, eos_tensor], dim=1)
+#         labels = torch.cat(
+#             [
+#                 torch.full_like(q_input_ids, self.ignore_index),
+#                 a_input_ids,
+#                 eos_tensor,
+#             ],
+#             dim=1,
+#         )
+#         return input_ids, labels
+
+#     def __call__(self, features: List[Tuple[str, str, str]]) -> Dict[str, torch.Tensor]:
+#         input_ids_list = []
+#         labels_list = []
+#         pixel_values_list = []
+#         max_length = 0
+
+#         # TODO collator的问题需要排查一下？训练出来的永远都是同一个答案
+#         # 可能是因为没有正确处理输入的tokenization和padding
+
+#         for query, answer, image_path in features:
+#             messages = [
+#                 {"role": "system", "content": self.system_prompt},
+#                 {"role": "user", "content": query},
+#             ]
+#             try:
+#                 prompt = self.processor.tokenizer.apply_chat_template(
+#                     messages,
+#                     tokenize=False,
+#                     add_generation_prompt=True,
+#                 )
+#             except Exception:
+#                 prompt = f"{self.system_prompt}\n{query}"
+
+#             image = Image.open(image_path).convert("RGB")
+#             self.processor.image_processor.patch_size = 14  # 如果模型是基于 ViT 或类似结构
+#             # print("Patch size:", self.processor.image_processor.patch_size)
+#             model_inputs = self.processor(image, prompt, return_tensors="pt")
+#             answer_ids = self.processor.tokenizer(
+#                 answer,
+#                 return_tensors="pt",
+#                 max_length=2048,
+#                 truncation=True,
+#                 padding=False,
+#             )["input_ids"]
+
+#             input_ids, labels = self.convert_sample(
+#                 model_inputs["input_ids"], answer_ids
+#             )
+#             input_ids_list.append(input_ids)
+#             labels_list.append(labels)
+#             pixel_values_list.append(model_inputs["pixel_values"])
+#             max_length = max(max_length, input_ids.shape[1])
+
+#         batch_input_ids = []
+#         batch_labels = []
+
+#         for input_ids, labels in zip(input_ids_list, labels_list):
+#             pad_len = max_length - input_ids.shape[1]
+#             pad_input_ids = torch.full(
+#                 (1, pad_len), self.processor.tokenizer.pad_token_id, dtype=torch.long
+#             )
+#             pad_labels = torch.full((1, pad_len), self.ignore_index, dtype=torch.long)
+#             batch_input_ids.append(torch.cat([pad_input_ids, input_ids], dim=1))
+#             batch_labels.append(torch.cat([pad_labels, labels], dim=1))
+
+#         batch = {
+#             "input_ids": torch.cat(batch_input_ids, dim=0),
+#             "labels": torch.cat(batch_labels, dim=0),
+#             "pixel_values": torch.cat(pixel_values_list, dim=0),
+#         }
+#         batch["attention_mask"] = (
+#             batch["input_ids"] != self.processor.tokenizer.pad_token_id
+#         ).long()
+#         return batch
 
 
 class TrainLlavaModelCollator:
@@ -128,13 +228,18 @@ class TrainLlavaModelCollator:
         processor: AutoProcessor,
         ignore_index: int = -100,
         system_prompt: Optional[str] = None,
+        debug: bool = False,  # 添加调试标志
     ):
         self.processor = processor
         self.ignore_index = ignore_index
         self.system_prompt = system_prompt or "You are a helpful assistant."
-        if not hasattr(self.processor, 'patch_size') or self.processor.patch_size is None:
-            self.processor.patch_size = 14  # LLaVA 通常使用的 patch_size 值
-        
+        self.debug = debug
+        self.call_count = 0  # 记录调用次数
+        if (
+            not hasattr(self.processor, "patch_size")
+            or self.processor.patch_size is None
+        ):
+            self.processor.patch_size = 14
 
     def convert_sample(
         self,
@@ -155,36 +260,64 @@ class TrainLlavaModelCollator:
         return input_ids, labels
 
     def __call__(self, features: List[Tuple[str, str, str]]) -> Dict[str, torch.Tensor]:
+        self.call_count += 1
+
+        if self.debug:
+            print(f"\n=== Collator调用 #{self.call_count} ===")
+            print(f"批大小: {len(features)}")
+
         input_ids_list = []
         labels_list = []
         pixel_values_list = []
         max_length = 0
 
-        for query, answer, image_path in features:
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": query},
-            ]
-            try:
-                prompt = self.processor.tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-            except Exception:
-                prompt = f"{self.system_prompt}\n{query}"
+        for i, (query, answer, image_path) in enumerate(features):
+            if self.debug:
+                print(f"\n--- 样本 {i} ---")
+                print(f"Query: {query[:100]}...")
+                print(f"Answer: {answer[:100]}...")
+                print(f"Image: {image_path}")
+
+            # messages = [
+            #     {"role": "system", "content": self.system_prompt},
+            #     {"role": "user", "content": query},
+            # ]
+            # try:
+            #     prompt = self.processor.tokenizer.apply_chat_template(
+            #         messages,
+            #         tokenize=False,
+            #         add_generation_prompt=True,
+            #     )
+            # except Exception:
+            prompt = f"{self.system_prompt}\n{query}"
+
+            if self.debug:
+                print(f"Generated prompt: {prompt[:200]}...")
 
             image = Image.open(image_path).convert("RGB")
-            self.processor.image_processor.patch_size = 14  # 如果模型是基于 ViT 或类似结构
-            # print("Patch size:", self.processor.image_processor.patch_size)
+            self.processor.image_processor.patch_size = 14
             model_inputs = self.processor(image, prompt, return_tensors="pt")
             answer_ids = self.processor.tokenizer(
                 answer,
                 return_tensors="pt",
                 max_length=2048,
                 truncation=True,
-                padding=False,
+                padding=True,
             )["input_ids"]
+
+            if self.debug:
+                print(f"Query tokens: {model_inputs['input_ids'].shape}")
+                print(f"Answer tokens: {answer_ids.shape}")
+                print(f"Query token ids: {model_inputs['input_ids'][0, :20]}")
+                print(f"Answer token ids: {answer_ids[0, :20]}")
+
+                # 解码部分tokens查看内容
+                query_text = self.processor.tokenizer.decode(
+                    model_inputs["input_ids"][0, :50]
+                )
+                answer_text = self.processor.tokenizer.decode(answer_ids[0, :50])
+                print(f"Query decoded: {query_text}")
+                print(f"Answer decoded: {answer_text}")
 
             input_ids, labels = self.convert_sample(
                 model_inputs["input_ids"], answer_ids
@@ -193,6 +326,10 @@ class TrainLlavaModelCollator:
             labels_list.append(labels)
             pixel_values_list.append(model_inputs["pixel_values"])
             max_length = max(max_length, input_ids.shape[1])
+
+        if self.debug:
+            print(f"\n最大长度: {max_length}")
+            print(f"样本长度: {[ids.shape[1] for ids in input_ids_list]}")
 
         batch_input_ids = []
         batch_labels = []
@@ -214,69 +351,256 @@ class TrainLlavaModelCollator:
         batch["attention_mask"] = (
             batch["input_ids"] != self.processor.tokenizer.pad_token_id
         ).long()
+
+        if self.debug:
+            print(f"\n=== 批处理结果 ===")
+            print(f"input_ids shape: {batch['input_ids'].shape}")
+            print(f"labels shape: {batch['labels'].shape}")
+            print(f"pixel_values shape: {batch['pixel_values'].shape}")
+            print(f"attention_mask shape: {batch['attention_mask'].shape}")
+
+            # 检查labels的分布
+            valid_labels = batch["labels"][batch["labels"] != self.ignore_index]
+            print(f"有效标签数量: {len(valid_labels)}")
+            if len(valid_labels) > 0:
+                print(f"标签范围: {valid_labels.min()} - {valid_labels.max()}")
+                print(f"前10个有效标签: {valid_labels[:10]}")
+
+            # 检查是否所有样本的labels都相同
+            for i in range(len(batch["labels"])):
+                valid_labels_i = batch["labels"][i][
+                    batch["labels"][i] != self.ignore_index
+                ]
+                if i == 0:
+                    first_valid_labels = valid_labels_i
+                else:
+                    if torch.equal(valid_labels_i, first_valid_labels):
+                        print(f"WARNING: 样本 {i} 的标签与样本 0 完全相同!")
+                    else:
+                        print(f"样本 {i} 的标签与样本 0 不同 (正常)")
+
         return batch
 
 
-if __name__ == "__main__":
+def safe_cat(tensors, dim=0, pad_value=0):
+    """
+    自动对齐除指定维度外的所有维度，对输入 tensor 列表进行拼接。
+    """
+    # 计算目标 shape
+    max_shape = list(tensors[0].shape)
+    for t in tensors[1:]:
+        for i in range(len(max_shape)):
+            if i != dim:
+                max_shape[i] = max(max_shape[i], t.shape[i])
+
+    padded = []
+    for t in tensors:
+        pad_dims = []
+        for i in reversed(range(len(max_shape))):
+            if i == dim:
+                pad_dims.extend([0, 0])
+            else:
+                diff = max_shape[i] - t.shape[i]
+                pad_dims.extend([0, diff])
+        padded_tensor = F.pad(t, pad_dims, value=pad_value)
+        padded.append(padded_tensor)
+
+    return torch.cat(padded, dim=dim)
+
+
+def main(is_train: bool = True):
     data_dir = "data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
-    llavadataset = LIDCClassificationDataset(data_dir)
+    llavadataset = LIDCClassificationDataset(data_dir, is_train=is_train)
     print(len(llavadataset))
     item = llavadataset[0]
     print("human_input:", item[0])
     print("chatbot_output:", item[1])
     print("image_path:", item[2])
-    
-    print("\n=== 数据集示例 ===")
-    for i, item in enumerate(llavadataset):
-        if i >= 3:  # 只显示前3个样本
-            break
-        print(f"样本 {i}:", item)
 
     # 测试 TrainLlavaModelCollator
     print("\n=== 测试 Collator ===")
     from transformers import AutoProcessor
-    
+
     # 加载处理器 - 使用实际的LLaVA处理器，你需要根据实际情况调整模型名称
     try:
-        processor_name = "llava-hf/llava-1.5-7b-hf"
+        processor_name = "/home/qianq/model/llava-1.5-7b-hf"
         processor = AutoProcessor.from_pretrained(processor_name)
-        
-        # 创建 collator
-        collator = TrainLlavaModelCollator(processor=processor)
-        print("创建了 collator:", collator)
-        
-        # 准备批处理样本 - 只取前2个样本作为示例
-        batch_samples = [llavadataset[i] for i in range(min(2, len(llavadataset)))]
-        print(f"准备处理 {len(batch_samples)} 个样本")
-        
-        # 应用 collator 进行批处理
-        try:
-            batch = collator(batch_samples)
-            
-            # 输出批处理结果的形状和内容摘要
-            print("\n批处理结果:")
-            for key, value in batch.items():
-                if isinstance(value, torch.Tensor):
-                    print(f"{key} 形状: {value.shape}")
-                    if key == "input_ids":
-                        # 显示第一个样本的部分标记ID
-                        print(f"第一个样本的前10个标记: {value[0, :10]}")
-                    elif key == "labels":
-                        # 计算非忽略标记的数量
-                        valid_tokens = (value != collator.ignore_index).sum().item()
-                        print(f"有效标签数量: {valid_tokens}")
-                else:
-                    print(f"{key}: {type(value)}")
-            
-        except Exception as e:
-            print(f"批处理过程中出错: {e}")
-            import traceback
-            traceback.print_exc()
-            
+
     except ImportError as e:
         print(f"加载处理器失败: {e}")
         print("请确保已安装所需的依赖库，例如: pip install transformers")
     except Exception as e:
         print(f"测试 collator 时出错: {e}")
-        import traceback
         traceback.print_exc()
+
+    # TODO 把所有的数据都跑一遍，并解码labels看下结果，谢谢！
+    # from tqdm import trange
+    from tqdm import tqdm
+
+    print("\n=== 遍历所有数据并解码labels ===")
+    # 创建带调试信息的collator
+    debug_collator = TrainLlavaModelCollator(processor=processor)
+    pad_token_id = (
+        processor.tokenizer.pad_token_id
+        if processor.tokenizer.pad_token_id is not None
+        else 0
+    )
+
+    # 分批处理数据，避免内存问题
+    batch_size = 2
+    total_samples = len(llavadataset)
+
+    bar = tqdm(total=total_samples, desc="Processing batches", unit="batch")
+    for start_idx in range(0, total_samples, batch_size):  # 我要所有的样本
+        bar.update(batch_size)
+        end_idx = min(start_idx + batch_size, total_samples)
+
+        # 获取批次数据
+        batch_samples = [llavadataset[i] for i in range(start_idx, end_idx)]
+
+        # 打印原始数据
+        # print("\n--- 原始数据 ---")
+        # for i, (human_input, chatbot_output, image_path) in enumerate(batch_samples):
+        # print(f"样本 {start_idx + i}:")
+        # print(f"  输入: {human_input[:100]}...")
+        # print(f"  期望输出: {chatbot_output[:100]}...")
+        # print(f"  图片路径: {image_path}")
+        # 应用collator处理
+
+        batch = debug_collator(batch_samples)
+
+        # 详细分析labels
+        # print("\n--- Labels分析 ---")
+        labels = batch["labels"]
+        querys = batch["input_ids"]
+        # images = batch['pixel_values']
+        # TODO 对所有batch中的images、querys、labels整合到一起进行unique分析， 分析总共有多少数据， 有多少个unique值，并对labels解码后的unique值进行分析
+        # 收集所有数据用于unique分析
+        if start_idx == 0:
+            # all_images = images
+            all_querys = querys
+            all_labels = labels
+        else:
+            try:
+
+                # all_images = safe_cat([all_images, images], dim=0, pad_value=0)        # 图像一般 padding 0
+                all_querys = safe_cat(
+                    [all_querys, querys], dim=0, pad_value=pad_token_id
+                )
+                all_labels = safe_cat([all_labels, labels], dim=0, pad_value=-100)
+            except Exception as e:
+                # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                # print(querys.shape, labels.shape)
+                # print(all_querys.shape, all_labels.shape)
+                # # tokenizer解码并分析：
+                # for i in range(querys.shape[0]):
+                #     print("Label shape:", labels.shape)
+                #     print("Max token id:", labels[i, :].max())
+                #     print("Min token id:", labels[i, :].min())
+                #     print("Dtype:", labels.dtype)
+                #     print("Label IDs:", labels[i, :])
+                #     print(f"Query {i}: [{processor.tokenizer.decode(querys[i, :], skip_special_tokens=True)}]")
+                #     print(f"Label {i}: [{processor.tokenizer.decode(labels[i, :], skip_special_tokens=True)}]")
+                # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                raise e
+
+        # 对每个样本解码labels
+        for i in range(labels.shape[0]):
+            sample_valid_labels = labels[i, :][
+                labels[i, :] != debug_collator.ignore_index
+            ]
+            if len(sample_valid_labels) > 0:
+                decoded_labels = processor.tokenizer.decode(
+                    sample_valid_labels, skip_special_tokens=True
+                )
+                # print(f"样本 {start_idx + i} 解码标签: {decoded_labels}")
+            else:
+                print(f"样本 {start_idx + i} 没有有效标签")
+
+        # 如果是最后一个批次，进行整体unique分析
+        if end_idx >= total_samples:
+            print(f"\n{'='*60}")
+            print("整体数据分析")
+            print(f"{'='*60}")
+
+            print(f"总样本数: {all_labels.shape[0]}")
+            # print(f"总图片数: {all_images.shape[0]}")
+            print(f"总查询数: {all_querys.shape[0]}")
+
+            # 分析labels的unique值
+            all_valid_labels = all_labels[all_labels != debug_collator.ignore_index]
+            unique_labels = torch.unique(all_valid_labels)
+            print(f"所有有效标签数量: {len(all_valid_labels)}")
+            print(f"unique标签值数量: {len(unique_labels)}")
+            print(f"unique标签值: {unique_labels}")
+
+            # 分析每个样本的解码标签
+            decoded_labels_list = []
+            for i in range(all_labels.shape[0]):
+                sample_valid_labels = all_labels[i, :][
+                    all_labels[i, :] != debug_collator.ignore_index
+                ]
+                if len(sample_valid_labels) > 0:
+                    decoded_labels = processor.tokenizer.decode(
+                        sample_valid_labels, skip_special_tokens=True
+                    )
+                    decoded_labels_list.append(decoded_labels)
+                else:
+                    decoded_labels_list.append("")
+
+            # 统计unique解码标签
+            unique_decoded_labels = list(set(decoded_labels_list))
+            print(f"unique解码标签数量: {len(unique_decoded_labels)}")
+            print("unique解码标签内容:")
+            for i, label in enumerate(unique_decoded_labels):
+                print(f"  {i}: {label}")
+
+            # 统计每个解码标签的出现次数
+            from collections import Counter
+
+            label_counts = Counter(decoded_labels_list)
+            print("解码标签出现次数:")
+            print(label_counts)
+
+            # 分析query的unique值
+            print(f"\n{'='*30} Query分析 {'='*30}")
+            all_valid_querys = all_querys[all_querys != pad_token_id]
+            unique_querys = torch.unique(all_valid_querys)
+            print(f"所有有效查询token数量: {len(all_valid_querys)}")
+            print(f"unique查询token数量: {len(unique_querys)}")
+            print(f"unique查询token前20个: {unique_querys[:20]}")
+
+            # 分析每个样本的解码查询
+            decoded_querys_list = []
+            for i in range(all_querys.shape[0]):
+                sample_valid_querys = all_querys[i, :][all_querys[i, :] != pad_token_id]
+                if len(sample_valid_querys) > 0:
+                    decoded_querys = processor.tokenizer.decode(
+                        sample_valid_querys, skip_special_tokens=True
+                    )
+                    decoded_querys_list.append(decoded_querys)
+                else:
+                    decoded_querys_list.append("")
+
+            # 统计unique解码查询
+            unique_decoded_querys = list(set(decoded_querys_list))
+            print(f"unique解码查询数量: {len(unique_decoded_querys)}")
+            print("unique解码查询内容:")
+            for i, query in enumerate(unique_decoded_querys):
+                print(f"  {i}: {query}...")
+
+            # 统计每个解码查询的出现次数
+            query_counts = Counter(decoded_querys_list)
+            print("解码查询出现次数:")
+            for query, count in query_counts.most_common(5):  # 显示前5个最常见的
+                print(f"  出现{count}次: {query}...")
+
+
+# def test_tokenize():
+#     tokenizer = AutoProcessor.from_pretrained("/home/qianq/model/llava-1.5-7b-hf").tokenizer
+#     text = "benign"
+#     tokens = tokenizer(text, return_tensors="pt", padding="longest", truncation=True, max_length=2048)
+
+if __name__ == "__main__":
+    main(is_train=True)
+    main(is_train=False)
