@@ -2,7 +2,6 @@ import os
 import argparse
 import logging
 import torch
-from torch.utils.data import DataLoader
 from transformers import (
     AutoModelForVision2Seq,
     AutoProcessor,
@@ -10,7 +9,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from data import LIDCClassificationDataset, TrainLlavaModelCollator
+from data import TrainLlavaModelCollator
 
 # 设置日志
 logging.basicConfig(
@@ -28,6 +27,12 @@ def parse_args():
         type=str,
         default="llava-hf/llava-1.5-7b-hf",
         help="要微调的预训练模型路径或名称",
+    )
+    parser.add_argument(
+        "--dataset_type",
+        type=str,
+        required=True,
+        help="数据集类型，LIDC-Classification or CC3M",
     )
     parser.add_argument(
         "--dataset_dir",
@@ -276,15 +281,31 @@ def main():
     print_trainable_parameters(model)
 
     # 加载数据集
+    
+    if args.dataset_type == "LIDC-Classification":
+        from data import LIDCClassificationDataset
+        train_dataset = LIDCClassificationDataset(args.dataset_dir, is_train=True)
+        eval_dataset = LIDCClassificationDataset(args.dataset_dir, is_train=False)
+        logger.info("使用LIDC-Classification数据集")
+    elif args.dataset_type == "CC3M":
+        from data import LlavaDatasetWithSplit
+        train_dataset = LlavaDatasetWithSplit(args.dataset_dir, is_train=True)
+        eval_dataset = LlavaDatasetWithSplit(args.dataset_dir, is_train=False)
+        logger.info("使用CC3M数据集")
+
     logger.info(f"加载数据集: {args.dataset_dir}")
-    train_dataset = LIDCClassificationDataset(args.dataset_dir, is_train=True)
-    eval_dataset = LIDCClassificationDataset(args.dataset_dir, is_train=False)
+
+
 
     logger.info(f"训练集大小: {len(train_dataset)}, 评估集大小: {len(eval_dataset)}")
 
     # 数据整理器
+    # data_collator = TrainLlavaModelCollator(
+        # processor=processor, system_prompt=args.system_prompt
+    # )
     data_collator = TrainLlavaModelCollator(
-        processor=processor, system_prompt=args.system_prompt
+        processor=processor,
+        IGNORE_INDEX=-100,  # 忽略索引
     )
 
     # 创建tensorboard日志目录
