@@ -1,16 +1,17 @@
 #!/bin/bash
 # 定义公共变量
 MODEL_PATH="/home/qianq/model/llava-1.5-7b-hf"
-DATASET_DIR="data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
-OUTPUT_DIR="./results/llava-1.5-7b-hf-projector-only"
+dataset_type="CC3M"
+DATASET_DIR="data/image-text-to-text/LLaVA-CC3M-Pretrain-595K"
+OUTPUT_DIR="./results/llava-1.5-7b-hf-projector-only-cc3m"
 TENSORBOARD_DIR="${OUTPUT_DIR}/tensorboard"
-SYSTEM_PROMPT="You are a professional medical imaging analysis assistant."
+SYSTEM_PROMPT="You are a imaging analysis assistant."
 DEEPSPEED_CONFIG="ds_config_zero2.json"
 
 # 训练参数
 LEARNING_RATE="5e-5"
-NUM_EPOCHS="5"
-BATCH_SIZE="2"        # DeepSpeed可以处理更小的批次
+NUM_EPOCHS="1"
+BATCH_SIZE="1"        # DeepSpeed可以处理更小的批次
 GRAD_ACCUM_STEPS="8"  # 增加梯度累积以补偿小批次
 EVAL_STEPS="500"
 SAVE_STEPS="500"
@@ -19,6 +20,7 @@ LOGGING_STEPS="20"
 # 使用DeepSpeed进行训练
 deepspeed --include localhost:2,3 finetune.py \
   --fp16 \
+  --dataset_type "${dataset_type}" \
   --dataset_dir "${DATASET_DIR}" \
   --output_dir "${OUTPUT_DIR}" \
   --model_name_or_path "${MODEL_PATH}" \
