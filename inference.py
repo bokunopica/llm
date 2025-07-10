@@ -1,49 +1,204 @@
 import os
+import argparse
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ["MAX_PIXELS"] = "1003520"
-os.environ["VIDEO_MAX_PIXELS"] = "50176"
-os.environ["FPS_MAX_FRAMES"] = "12"
+def parse_args():
+    parser = argparse.ArgumentParser(description="Inference with Swift")
+    
+    # 设备配置
+    parser.add_argument("--cuda_visible_devices", type=str, default="1,3", 
+                       help="CUDA visible devices (default: 1,3)")
+    parser.add_argument("--infer_backend", type=str, default="pt",
+                       choices=["pt", "vllm", "lmdeploy", "sglang"],
+                       help="Inference backend")
+    
+    # 模型配置
+    parser.add_argument("--model", type=str,
+                       default="/home/qianq/mycodes/llm/results/llava-1.5-7b-hf-swift-lora/v5-20250709-194154/checkpoint-500",
+                       help="Model path")
+    parser.add_argument("--dataset", type=str,
+                       default="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN",
+                       help="Dataset path")
+    
+    # 推理配置
+    parser.add_argument("--max_batch_size", type=int, default=8,
+                       help="Max batch size")
+    parser.add_argument("--max_new_tokens", type=int, default=512,
+                       help="Max new tokens")
+    parser.add_argument("--temperature", type=float, default=0.7,
+                       help="Temperature")
+    parser.add_argument("--top_p", type=float, default=0.9,
+                       help="Top p")
+    
+    # 数据集配置
+    parser.add_argument("--val_dataset_sample", type=int, default=100,
+                       help="Number of samples for validation")
+    parser.add_argument("--write_batch_size", type=int, default=32,
+                       help="Write batch size")
+    
+    # 分布式配置
+    parser.add_argument("--tensor_parallel_size", type=int, default=1,
+                       help="Tensor parallel size (for vllm)")
+    parser.add_argument("--pipeline_parallel_size", type=int, default=1,
+                       help="Pipeline parallel size (for vllm)")
+    
+    # 输出配置
+    parser.add_argument("--result_path", type=str, default=None,
+                       help="Result path")
+    parser.add_argument("--metric", type=str, default=None,
+                       choices=["acc", "rouge"],
+                       help="Evaluation metric")
+    
+    return parser.parse_args()
 
-from swift.llm import InferArguments, infer_main, ModelType
-import json
-from pathlib import Path
+def setup_environment(cuda_visible_devices):
+    """设置环境变量"""
+    os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
+    os.environ["MAX_PIXELS"] = "1003520"
+    os.environ["VIDEO_MAX_PIXELS"] = "50176"
+    os.environ["FPS_MAX_FRAMES"] = "12"
 
-
-def inference_on_dataset():
-    """在数据集上进行推理"""
-    # 创建推理参数
-    model_path = "/home/qianq/mycodes/llm/results/llava-1.5-7b-hf-swift-lora/v5-20250709-194154/checkpoint-500"
+def inference_multi_gpu_pt(args):
+    """使用PT backend进行多GPU推理"""
+    from swift.llm import InferArguments, infer_main
+    
+    # 计算GPU数量
+    gpu_count = len(args.cuda_visible_devices.split(','))
+    
     infer_args = InferArguments(
-        model=model_path,
+        model=args.model,
         infer_backend="pt",
-        max_batch_size=4,
-        max_new_tokens=512,
-        temperature=0.7,
-        top_p=0.9,
+        
+        # 批处理配置 - 根据GPU数量调整
+        max_batch_size=args.max_batch_size * gpu_count,
+        
+        # 生成配置
+        max_new_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        do_sample=True,
+        
         # 数据集配置
-        # dataset=["/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"],
-        val_dataset=[
-            "/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN/test.jsonl",
-        ],
-        # model_type=ModelType.llava1_5_hf,
-        result_path=f"{model_path}/inference_results.jsonl",
-        # 数据集采样
+        val_dataset=[f"{args.dataset}/test.jsonl"] if args.dataset.endswith('.jsonl') else [args.dataset],
+        val_dataset_sample=args.val_dataset_sample,
         dataset_shuffle=False,
-        # 批处理配置
-        write_batch_size=256,
-        # 评估指标
-        # metric='acc',  # 或者 'acc'
+        
+        # 输出配置
+        result_path=args.result_path or f"{args.model}/inference_results.jsonl",
+        write_batch_size=args.write_batch_size,
+        
+        # 评估配置
+        metric=args.metric,
+        
+        # 分布式配置
+        ddp_backend="nccl",
     )
-    # 使用SwiftInfer进行推理
-    infer_main(infer_args)
+    
+    print(f"使用PT backend在{gpu_count}个GPU上进行推理")
+    print(f"调整后的批大小: {infer_args.max_batch_size}")
+    
+    return infer_main(infer_args)
 
+def inference_multi_gpu_vllm(args):
+    """使用VLLM backend进行多GPU推理"""
+    from swift.llm import InferArguments, infer_main
+    
+    # 计算GPU数量
+    gpu_count = len(args.cuda_visible_devices.split(','))
+    tensor_parallel_size = min(args.tensor_parallel_size, gpu_count)
+    
+    infer_args = InferArguments(
+        model=args.model,
+        infer_backend="vllm",
+        
+        # VLLM特定配置
+        tensor_parallel_size=tensor_parallel_size,
+        pipeline_parallel_size=args.pipeline_parallel_size,
+        
+        # 批处理配置
+        max_batch_size=args.max_batch_size,
+        
+        # 生成配置
+        max_new_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        
+        # 数据集配置
+        val_dataset=[f"{args.dataset}/test.jsonl"] if args.dataset.endswith('.jsonl') else [args.dataset],
+        val_dataset_sample=args.val_dataset_sample,
+        dataset_shuffle=False,
+        
+        # 输出配置
+        result_path=args.result_path or f"{args.model}/inference_results_vllm.jsonl",
+        write_batch_size=args.write_batch_size,
+        
+        # 评估配置
+        metric=args.metric,
+        
+        # VLLM优化配置
+        gpu_memory_utilization=0.8,
+        max_model_len=4096,
+    )
+    
+    print(f"使用VLLM backend在{gpu_count}个GPU上进行推理")
+    print(f"张量并行大小: {tensor_parallel_size}")
+    
+    return infer_main(infer_args)
+
+def inference_on_dataset(args):
+    """在数据集上进行推理"""
+    
+    if args.infer_backend == "pt":
+        return inference_multi_gpu_pt(args)
+    elif args.infer_backend == "vllm":
+        return inference_multi_gpu_vllm(args)
+    else:
+        # 其他backend的通用配置
+        from swift.llm import InferArguments, infer_main
+        
+        infer_args = InferArguments(
+            model=args.model,
+            infer_backend=args.infer_backend,
+            max_batch_size=args.max_batch_size,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            val_dataset=[f"{args.dataset}/test.jsonl"] if args.dataset.endswith('.jsonl') else [args.dataset],
+            val_dataset_sample=args.val_dataset_sample,
+            dataset_shuffle=False,
+            result_path=args.result_path or f"{args.model}/inference_results_{args.infer_backend}.jsonl",
+            write_batch_size=args.write_batch_size,
+            metric=args.metric,
+        )
+        
+        return infer_main(infer_args)
+
+def main():
+    args = parse_args()
+    
+    # 设置环境变量
+    setup_environment(args.cuda_visible_devices)
+    
+    # 打印配置信息
+    print("=== 推理配置 ===")
+    print(f"CUDA设备: {args.cuda_visible_devices}")
+    print(f"推理后端: {args.infer_backend}")
+    print(f"模型路径: {args.model}")
+    print(f"数据集路径: {args.dataset}")
+    print(f"批大小: {args.max_batch_size}")
+    print(f"最大新token数: {args.max_new_tokens}")
+    print(f"温度: {args.temperature}")
+    print(f"采样数量: {args.val_dataset_sample}")
+    if args.infer_backend == "vllm":
+        print(f"张量并行大小: {args.tensor_parallel_size}")
+    print("=" * 20)
+    
+    # 开始推理
+    print("开始推理...")
+    results = inference_on_dataset(args)
+    
+    print("推理完成!")
+    return results
 
 if __name__ == "__main__":
-    # 直接运行批量推理示例
-    print("开始推理...")
-    results = inference_on_dataset()
-    print(results)
-
-    # 如果要运行其他类型的推理，可以调用main()
-    # main()
+    main()
+    # print(f"推理结果: {results}")
