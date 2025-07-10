@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=1,3 torchrun --nproc_per_node=2 finetune.py
