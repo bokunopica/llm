@@ -79,7 +79,7 @@ def inference_multi_gpu_pt(args):
         
         # 数据集配置
         val_dataset=[f"{args.dataset}/test.jsonl"] if args.dataset.endswith('.jsonl') else [args.dataset],
-        val_dataset_sample=args.val_dataset_sample,
+        # val_dataset_sample=args.val_dataset_sample,
         dataset_shuffle=False,
         
         # 输出配置
