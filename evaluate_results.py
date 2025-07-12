@@ -242,25 +242,47 @@ def eval(ckpt_path):
 def main():
     RESULT_FOLDER = "/home/qianq/mycodes/llm/results/"
 
+    # print(
+    #     "############## swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5 ##############"
+    # )
+    # eval(
+    #     os.path.join(
+    #         RESULT_FOLDER,
+    #         "swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5",
+    #         "v0-20250710-154830",
+    #         "checkpoint-250",
+    #     ),
+    # )
+    # eval(
+    #     os.path.join(
+    #         RESULT_FOLDER,
+    #         "swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5",
+    #         "v0-20250710-154830",
+    #         "checkpoint-410",
+    #     ),
+    # )
+
+
     print(
-        "############## swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5 ##############"
+        "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6 ##############"
     )
     eval(
         os.path.join(
             RESULT_FOLDER,
-            "swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5",
-            "v0-20250710-154830",
+            "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
+            "v1-20250711-140224",
             "checkpoint-250",
         ),
     )
     eval(
         os.path.join(
             RESULT_FOLDER,
-            "swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5",
-            "v0-20250710-154830",
+            "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
+            "v1-20250711-140224",
             "checkpoint-410",
         ),
     )
+
 
 
 if __name__ == "__main__":
