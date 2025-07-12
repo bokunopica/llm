@@ -95,7 +95,57 @@ def parse_args():
         help="Run name for logging",
     )
 
+    # 视觉处理器配置
+    parser.add_argument(
+        "--patch_size",
+        type=int,
+        default=14,
+        help="Patch size for vision processor",
+    )
+
     return parser.parse_args()
+
+
+def setup_processor_config(model_path, patch_size, image_size):
+    """设置处理器配置"""
+    import json
+
+    # 读取处理器配置
+    processor_config_path = os.path.join(model_path, "preprocessor_config.json")
+    if os.path.exists(processor_config_path):
+        with open(processor_config_path, "r") as f:
+            config = json.load(f)
+
+        # 更新配置
+        if "vision_config" in config:
+            config["vision_config"]["patch_size"] = patch_size
+            config["vision_config"]["image_size"] = image_size
+        else:
+            config["patch_size"] = patch_size
+            config["image_size"] = image_size
+
+        # 保存更新后的配置
+        with open(processor_config_path, "w") as f:
+            json.dump(config, f, indent=2)
+
+        print(f"已更新处理器配置: patch_size={patch_size}, image_size={image_size}")
+
+    # 检查并更新模型配置
+    model_config_path = os.path.join(model_path, "config.json")
+    if os.path.exists(model_config_path):
+        with open(model_config_path, "r") as f:
+            config = json.load(f)
+
+        # 更新视觉配置
+        if "vision_config" in config:
+            config["vision_config"]["patch_size"] = patch_size
+            config["vision_config"]["image_size"] = image_size
+
+        # 保存更新后的配置
+        with open(model_config_path, "w") as f:
+            json.dump(config, f, indent=2)
+
+        print(f"已更新模型配置: vision_config.patch_size={patch_size}")
 
 
 def main():

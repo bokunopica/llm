@@ -7,9 +7,9 @@ MODEL="/home/qianq/model/${MODEL_NAME}"
 DATASET="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
 
 NUM_TRAIN_EPOCHS=5
-TRAIN_BATCH_SIZE=8
-EVAL_BATCH_SIZE=8
-GRADIENT_ACCUMULATION_STEPS=8
+TRAIN_BATCH_SIZE=1
+EVAL_BATCH_SIZE=1
+GRADIENT_ACCUMULATION_STEPS=64
 LEARNING_RATE=1e-5
 WEIGHT_DECAY=0.01
 WARMUP_RATIO=0.1
@@ -65,6 +65,7 @@ torchrun --nproc_per_node=2 finetune_projector.py \
     --eval_steps "$EVAL_STEPS" \
     --save_total_limit "$SAVE_TOTAL_LIMIT" \
     --seed "$SEED" \
-    --run_name "$RUN_NAME"
+    --run_name "$RUN_NAME" \
+    --model_type llava1_6_mistral_hf
 
 echo "Fine-tuning completed!"
