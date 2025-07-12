@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 设置参数
-CUDA_VISIBLE_DEVICES="0,2"
+CUDA_VISIBLE_DEVICES="1,3"
 MODEL_NAME="llava-1.5-7b-hf"
 MODEL="/home/qianq/model/${MODEL_NAME}"
 DATASET="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"

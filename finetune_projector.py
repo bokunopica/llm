@@ -25,6 +25,11 @@ def parse_args():
         help="Model path",
     )
     parser.add_argument(
+        "--model_type",
+        type=str,
+        default="llava1_6_mistral_hf",
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN",
@@ -158,6 +163,7 @@ def main():
             report_to=["tensorboard"],
             run_name=args.run_name,
             dataloader_pin_memory=False,
+            model_type=args.model_type,
         )
     )
 

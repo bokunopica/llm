@@ -30,8 +30,8 @@ def parse_args():
                        help="Top p")
     
     # 数据集配置
-    parser.add_argument("--val_dataset_sample", type=int, default=100,
-                       help="Number of samples for validation")
+    parser.add_argument("--val_dataset_sample", type=int, default=-1,
+                       help="Number of samples for validation, -1 means all")
     parser.add_argument("--write_batch_size", type=int, default=32,
                        help="Write batch size")
     
@@ -57,12 +57,34 @@ def setup_environment(cuda_visible_devices):
     os.environ["VIDEO_MAX_PIXELS"] = "50176"
     os.environ["FPS_MAX_FRAMES"] = "12"
 
+def prepare_dataset_config(dataset_path, val_dataset_sample):
+    """准备数据集配置，避免重复代码"""
+    # 确定数据集路径
+    if dataset_path.endswith('.jsonl'):
+        val_dataset_path = dataset_path
+    else:
+        val_dataset_path = dataset_path
+    
+    # 确定采样数量
+    if val_dataset_sample == -1:
+        # 如果设置为-1，则使用所有样本
+        try:
+            with open(f"{dataset_path}/test.jsonl", 'r') as f:
+                dataset_sample = len(f.readlines())
+        except:
+            dataset_sample = 100  # 默认值
+    else:
+        dataset_sample = val_dataset_sample
+    
+    return val_dataset_path, dataset_sample
+
 def inference_multi_gpu_pt(args):
     """使用PT backend进行多GPU推理"""
     from swift.llm import InferArguments, infer_main
     
     # 计算GPU数量
     gpu_count = len(args.cuda_visible_devices.split(','))
+    val_dataset_path, dataset_sample = prepare_dataset_config(args.dataset, args.val_dataset_sample)
     
     infer_args = InferArguments(
         model=args.model,
@@ -78,8 +100,8 @@ def inference_multi_gpu_pt(args):
         do_sample=True,
         
         # 数据集配置
-        val_dataset=[f"{args.dataset}/test.jsonl"] if args.dataset.endswith('.jsonl') else [args.dataset],
-        # val_dataset_sample=args.val_dataset_sample,
+        val_dataset=[val_dataset_path],
+        val_dataset_sample=dataset_sample,
         dataset_shuffle=False,
         
         # 输出配置
@@ -105,6 +127,8 @@ def inference_multi_gpu_vllm(args):
     # 计算GPU数量
     gpu_count = len(args.cuda_visible_devices.split(','))
     tensor_parallel_size = min(args.tensor_parallel_size, gpu_count)
+    val_dataset_path, dataset_sample = prepare_dataset_config(args.dataset, args.val_dataset_sample)
+
     
     infer_args = InferArguments(
         model=args.model,
@@ -123,8 +147,8 @@ def inference_multi_gpu_vllm(args):
         top_p=args.top_p,
         
         # 数据集配置
-        val_dataset=[f"{args.dataset}/test.jsonl"] if args.dataset.endswith('.jsonl') else [args.dataset],
-        val_dataset_sample=args.val_dataset_sample,
+        val_dataset=[val_dataset_path],
+        val_dataset_sample=dataset_sample,
         dataset_shuffle=False,
         
         # 输出配置
@@ -154,6 +178,9 @@ def inference_on_dataset(args):
     else:
         # 其他backend的通用配置
         from swift.llm import InferArguments, infer_main
+
+        val_dataset_path, dataset_sample = prepare_dataset_config(args.dataset, args.val_dataset_sample)
+
         
         infer_args = InferArguments(
             model=args.model,
@@ -162,8 +189,8 @@ def inference_on_dataset(args):
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
             top_p=args.top_p,
-            val_dataset=[f"{args.dataset}/test.jsonl"] if args.dataset.endswith('.jsonl') else [args.dataset],
-            val_dataset_sample=args.val_dataset_sample,
+            val_dataset=[val_dataset_path],
+            val_dataset_sample=dataset_sample,
             dataset_shuffle=False,
             result_path=args.result_path or f"{args.model}/inference_results_{args.infer_backend}.jsonl",
             write_batch_size=args.write_batch_size,

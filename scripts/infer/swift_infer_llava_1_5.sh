@@ -1,16 +1,16 @@
 #!/bin/bash
 # VLLM 高性能推理
 
-CUDA_VISIBLE_DEVICES="1,3"
+CUDA_VISIBLE_DEVICES="2"
 INFER_BACKEND="vllm"
-MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5/v0-20250710-154830/checkpoint-250"
+MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6/v1-20250711-140224/checkpoint-410"
 DATASET="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
 MAX_BATCH_SIZE=16
 MAX_NEW_TOKENS=512
-TEMPERATURE=0.7
+TEMPERATURE=0.7 # sft模型的Temperature应该低一些 0.6
 TOP_P=0.9
 WRITE_BATCH_SIZE=64
-TENSOR_PARALLEL_SIZE=2
+TENSOR_PARALLEL_SIZE=1
 RESULT_PATH="${MODEL}/inference_results.jsonl"
 METRIC="acc"
 
