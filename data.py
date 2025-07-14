@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 from transformers import AutoProcessor
 from typing import List, Tuple, Dict
-
+import torchvision.transforms as transforms
 
 
 @dataclass
@@ -51,8 +51,6 @@ class LlavaDataset(Dataset):
 
         image_path = self.image_dir.joinpath(cur_data.get("image"))
         return human_input, chatbot_output, image_path
-
-
 
 
 class LIDCClassificationDataset(Dataset):
@@ -136,9 +134,52 @@ def build_qaimage(processor: AutoProcessor, q_text: str, a_text: str, image_path
 
 
 class TrainLlavaModelCollator:
-    def __init__(self, processor: AutoProcessor, IGNORE_INDEX: int) -> None:
+    def __init__(self, processor: AutoProcessor, IGNORE_INDEX: int, enable_augmentation: bool = True) -> None:
         self.processor = processor
         self.ingnore_index = IGNORE_INDEX
+        self.enable_augmentation = enable_augmentation
+        
+        # 定义图像增强变换
+        self.augmentation_transforms = self._build_augmentation_transforms()
+
+    def _build_augmentation_transforms(self):
+        """构建图像增强变换"""
+        return transforms.Compose([
+            transforms.RandomHorizontalFlip(p=0.5),  # 水平翻转
+            transforms.RandomVerticalFlip(p=0.3),    # 垂直翻转
+            transforms.RandomRotation(degrees=30),    # 随机旋转 ±30度
+            transforms.RandomResizedCrop(
+                size=(224, 224),  # 根据您的模型输入尺寸调整
+                scale=(0.8, 1.2),  # 缩放范围
+                ratio=(0.8, 1.2),  # 宽高比范围
+                interpolation=transforms.InterpolationMode.BILINEAR
+            ),
+            transforms.RandomAffine(
+                degrees=0,          # 已经通过RandomRotation处理
+                translate=(0.1, 0.1),  # 平移 ±10%
+                scale=(0.9, 1.1),   # 缩放
+                shear=(-10, 10)     # 剪切变换
+            ),
+            transforms.ColorJitter(
+                brightness=0.2,     # 亮度调整
+                contrast=0.2,       # 对比度调整
+                saturation=0.2,     # 饱和度调整
+                hue=0.1            # 色调调整
+            ),
+        ])
+
+    def apply_image_augmentation(self, image: Image.Image) -> Image.Image:
+        """应用图像增强"""
+        if not self.enable_augmentation:
+            return image
+            
+        try:
+            # 应用增强变换
+            augmented_image = self.augmentation_transforms(image)
+            return augmented_image
+        except Exception as e:
+            print(f"图像增强失败，使用原图像: {e}")
+            return image
 
     def convert_one_piece(
         self,
@@ -174,9 +215,18 @@ class TrainLlavaModelCollator:
         max_input_len_list = []
 
         for feature in features:
-            qaimage_output = build_qaimage(
-                self.processor, feature[0], feature[1], feature[2]
+            # 加载并增强图像
+            image_path = feature[2]
+            raw_image = Image.open(image_path)
+            
+            # 应用图像增强
+            augmented_image = self.apply_image_augmentation(raw_image)
+            
+            # 使用增强后的图像构建输入
+            qaimage_output = self.build_qaimage_with_augmented_image(
+                self.processor, feature[0], feature[1], augmented_image
             )
+            
             temp_input_ids, temp_labels = self.convert_one_piece(
                 qaimage_output.q_input_ids, qaimage_output.a_input_ids
             )
@@ -227,6 +277,27 @@ class TrainLlavaModelCollator:
             "attention_mask": attention_mask,
         }
 
+    def build_qaimage_with_augmented_image(self, processor: AutoProcessor, q_text: str, a_text: str, image: Image.Image):
+        """使用增强后的图像构建QA输入"""
+        prompt = f"USER: {q_text}\nASSISTANT:"
+        
+        inputs = processor(prompt, image, return_tensors="pt")
+
+        a_input_ids = processor.tokenizer(
+            a_text,
+            return_tensors="pt",
+            padding="longest",
+            truncation=True,
+            max_length=256,
+        )["input_ids"]
+
+        res = QaImageOutput(
+            q_input_ids=inputs.get("input_ids"),
+            pixel_values=inputs.get("pixel_values"),
+            a_input_ids=a_input_ids,
+        )
+        return res
+
 
 def safe_cat(tensors, dim=0, pad_value=0):
     """
@@ -265,14 +336,18 @@ def main(is_train: bool = True):
 
 
 def test_llava_cc3m():
-    llavadataset = LlavaDatasetWithSplit("data/image-text-to-text/LLaVA-CC3M-Pretrain-595K", is_train=False)
+    llavadataset = LlavaDatasetWithSplit(
+        "data/image-text-to-text/LLaVA-CC3M-Pretrain-595K", is_train=False
+    )
     print(len(llavadataset))
     item = llavadataset[0]
     print("human_input:", item[0])
     print("chatbot_output:", item[1])
     print("image_path:", item[2])
 
+
 import json
+
 
 def split_cc3m():
     data_path = "data/image-text-to-text/LLaVA-CC3M-Pretrain-595K"
@@ -296,11 +371,16 @@ def split_cc3m():
 
         # 保存到文件
         with open(f"{data_path}/train.jsonl", "a") as f:
-            f.write(json.dumps({
-                "human_input": human_input,
-                "chatbot_output": chatbot_output,
-                "image_path": str(image_path)
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "human_input": human_input,
+                        "chatbot_output": chatbot_output,
+                        "image_path": str(image_path),
+                    }
+                )
+                + "\n"
+            )
 
     for i in trange(split_index, len(llavadataset)):
         item = llavadataset[i]
@@ -314,12 +394,16 @@ def split_cc3m():
 
         # 保存到文件
         with open(f"{data_path}/test.jsonl", "a") as f:
-            f.write(json.dumps({
-                "human_input": human_input,
-                "chatbot_output": chatbot_output,
-                "image_path": str(image_path)
-            }) + "\n")
-
+            f.write(
+                json.dumps(
+                    {
+                        "human_input": human_input,
+                        "chatbot_output": chatbot_output,
+                        "image_path": str(image_path),
+                    }
+                )
+                + "\n"
+            )
 
 
 if __name__ == "__main__":
