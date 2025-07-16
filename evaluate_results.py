@@ -263,25 +263,52 @@ def main():
     # )
 
 
+    # print(
+    #     "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6 ##############"
+    # )
+    # eval(
+    #     os.path.join(
+    #         RESULT_FOLDER,
+    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
+    #         "v1-20250711-140224",
+    #         "checkpoint-250",
+    #     ),
+    # )
+    # eval(
+    #     os.path.join(
+    #         RESULT_FOLDER,
+    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
+    #         "v1-20250711-140224",
+    #         "checkpoint-410",
+    #     ),
+    # )
+
+
+    
     print(
-        "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6 ##############"
+        "############## swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-5 ##############"
     )
     eval(
         os.path.join(
             RESULT_FOLDER,
-            "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-            "v1-20250711-140224",
-            "checkpoint-250",
-        ),
-    )
-    eval(
-        os.path.join(
-            RESULT_FOLDER,
-            "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-            "v1-20250711-140224",
+            "swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-5",
+            "v9-20250712-151244",
             "checkpoint-410",
         ),
     )
+
+    print(
+        "############## swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-6 ##############"
+    )
+    eval(
+        os.path.join(
+            RESULT_FOLDER,
+            "swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-6",
+            "v10-20250713-102834",
+            "checkpoint-410",
+        ),
+    )
+
 
 
 
