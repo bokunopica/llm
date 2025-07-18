@@ -323,6 +323,17 @@ def main():
     )
 
 
+    eval(
+        os.path.join(
+            RESULT_FOLDER,
+            "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
+            "v2-20250718-172038",
+            "checkpoint-410",
+        ),
+    )
+
+
+
 
 
 

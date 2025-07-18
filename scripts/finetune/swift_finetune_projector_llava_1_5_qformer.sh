@@ -13,7 +13,7 @@ GRADIENT_ACCUMULATION_STEPS=16
 LEARNING_RATE=1e-6
 WEIGHT_DECAY=0.01
 WARMUP_RATIO=0.1
-USE_LORA=True
+USE_LORA=false
 LORA_RANK=64
 LORA_ALPHA=128
 LORA_DROPOUT=0.1
@@ -22,11 +22,19 @@ SAVE_STEPS=250
 EVAL_STEPS=250
 SAVE_TOTAL_LIMIT=2
 SEED=42
-RUN_NAME="swift-projector-${MODEL_NAME}-EPOCH=${NUM_TRAIN_EPOCHS}-LR=${LEARNING_RATE}"
+
+# Q-former 配置
+USE_QFORMER=true
+NUM_QUERY_TOKENS=32
+QFORMER_HIDDEN_SIZE=768
+QFORMER_NUM_LAYERS=6
+QFORMER_NUM_HEADS=12
+
+RUN_NAME="swift-projector-${MODEL_NAME}-qformer-EPOCH=${NUM_TRAIN_EPOCHS}-LR=${LEARNING_RATE}"
 OUTPUT_DIR="./results/${RUN_NAME}"
 
 # 打印配置信息
-echo "=== Fine-tuning Configuration ==="
+echo "=== Fine-tuning Configuration with Q-former ==="
 echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 echo "Model: $MODEL"
 echo "Dataset: $DATASET"
@@ -36,7 +44,13 @@ echo "Train Batch Size: $TRAIN_BATCH_SIZE"
 echo "Learning Rate: $LEARNING_RATE"
 echo "Use LoRA: $USE_LORA"
 echo "Run Name: $RUN_NAME"
-echo "================================="
+echo "--- Q-former Configuration ---"
+echo "Use Q-former: $USE_QFORMER"
+echo "Query Tokens: $NUM_QUERY_TOKENS"
+echo "Hidden Size: $QFORMER_HIDDEN_SIZE"
+echo "Num Layers: $QFORMER_NUM_LAYERS"
+echo "Num Heads: $QFORMER_NUM_HEADS"
+echo "=============================================="
 
 # 创建输出目录
 mkdir -p "$OUTPUT_DIR"
@@ -44,7 +58,7 @@ mkdir -p "$OUTPUT_DIR"
 # 设置环境变量
 export CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
 
-# 运行训练 - 修复torchrun命令
+# 运行训练 - 添加Q-former参数
 torchrun --nproc_per_node=2 finetune_projector.py \
     --cuda_visible_devices "$CUDA_VISIBLE_DEVICES" \
     --model "$MODEL" \
@@ -57,6 +71,7 @@ torchrun --nproc_per_node=2 finetune_projector.py \
     --learning_rate "$LEARNING_RATE" \
     --weight_decay "$WEIGHT_DECAY" \
     --warmup_ratio "$WARMUP_RATIO" \
+    --use_lora "$USE_LORA" \
     --lora_rank "$LORA_RANK" \
     --lora_alpha "$LORA_ALPHA" \
     --lora_dropout "$LORA_DROPOUT" \
@@ -65,6 +80,11 @@ torchrun --nproc_per_node=2 finetune_projector.py \
     --eval_steps "$EVAL_STEPS" \
     --save_total_limit "$SAVE_TOTAL_LIMIT" \
     --seed "$SEED" \
-    --run_name "$RUN_NAME"
+    --run_name "$RUN_NAME" \
+    --use_qformer "$USE_QFORMER" \
+    --num_query_tokens "$NUM_QUERY_TOKENS" \
+    --qformer_hidden_size "$QFORMER_HIDDEN_SIZE" \
+    --qformer_num_layers "$QFORMER_NUM_LAYERS" \
+    --qformer_num_heads "$QFORMER_NUM_HEADS"
 
-echo "Fine-tuning completed!"
+echo "Q-former Fine-tuning completed!"

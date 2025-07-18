@@ -33,8 +33,40 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./results/llava-1.5-7b-hf-swift-projector",
+        default="./results/llava-1.5-7b-hf-swift-qformer",
         help="Output directory",
+    )
+
+    # Q-former配置
+    parser.add_argument(
+        "--use_qformer",
+        type=bool,
+        default=True,
+        help="Use Q-former instead of MLP projector",
+    )
+    parser.add_argument(
+        "--num_query_tokens",
+        type=int,
+        default=32,
+        help="Number of query tokens for Q-former",
+    )
+    parser.add_argument(
+        "--qformer_hidden_size",
+        type=int,
+        default=768,
+        help="Hidden size for Q-former",
+    )
+    parser.add_argument(
+        "--qformer_num_layers",
+        type=int,
+        default=6,
+        help="Number of transformer layers in Q-former",
+    )
+    parser.add_argument(
+        "--qformer_num_heads",
+        type=int,
+        default=12,
+        help="Number of attention heads in Q-former",
     )
 
     # 训练配置
@@ -60,7 +92,7 @@ def parse_args():
         help="Gradient accumulation steps",
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=5e-5, help="Learning rate"
+        "--learning_rate", type=float, default=1e-4, help="Learning rate for Q-former"
     )
     parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
     parser.add_argument("--warmup_ratio", type=float, default=0.1, help="Warmup ratio")
@@ -86,7 +118,7 @@ def parse_args():
     parser.add_argument(
         "--run_name",
         type=str,
-        default="llava-1.5-7b-lidc-projector",
+        default="llava-1.5-7b-lidc-qformer",
         help="Run name for logging",
     )
 
@@ -99,6 +131,49 @@ def parse_args():
     )
 
     return parser.parse_args()
+
+
+def setup_qformer_config(model_path, args):
+    """设置Q-former配置"""
+    import json
+
+    # 读取模型配置
+    model_config_path = os.path.join(model_path, "config.json")
+    if os.path.exists(model_config_path):
+        with open(model_config_path, "r") as f:
+            config = json.load(f)
+
+        # 添加Q-former配置
+        qformer_config = {
+            "use_qformer": args.use_qformer,
+            "num_query_tokens": args.num_query_tokens,
+            "hidden_size": args.qformer_hidden_size,
+            "num_hidden_layers": args.qformer_num_layers,
+            "num_attention_heads": args.qformer_num_heads,
+            "intermediate_size": args.qformer_hidden_size * 4,
+            "hidden_dropout_prob": 0.1,
+            "attention_probs_dropout_prob": 0.1,
+            "initializer_range": 0.02,
+            "layer_norm_eps": 1e-12,
+        }
+        
+        config["qformer_config"] = qformer_config
+        
+        # 修改projector配置
+        if "projector_config" in config:
+            config["projector_config"]["projector_type"] = "qformer"
+        else:
+            config["projector_config"] = {"projector_type": "qformer"}
+
+        # 保存更新后的配置
+        with open(model_config_path, "w") as f:
+            json.dump(config, f, indent=2)
+
+        print(f"已更新模型配置为Q-former:")
+        print(f"  - 查询token数量: {args.num_query_tokens}")
+        print(f"  - 隐藏层大小: {args.qformer_hidden_size}")
+        print(f"  - Transformer层数: {args.qformer_num_layers}")
+        print(f"  - 注意力头数: {args.qformer_num_heads}")
 
 
 def setup_processor_config(model_path, patch_size, image_size):
@@ -125,23 +200,6 @@ def setup_processor_config(model_path, patch_size, image_size):
 
         print(f"已更新处理器配置: patch_size={patch_size}, image_size={image_size}")
 
-    # 检查并更新模型配置
-    model_config_path = os.path.join(model_path, "config.json")
-    if os.path.exists(model_config_path):
-        with open(model_config_path, "r") as f:
-            config = json.load(f)
-
-        # 更新视觉配置
-        if "vision_config" in config:
-            config["vision_config"]["patch_size"] = patch_size
-            config["vision_config"]["image_size"] = image_size
-
-        # 保存更新后的配置
-        with open(model_config_path, "w") as f:
-            json.dump(config, f, indent=2)
-
-        print(f"已更新模型配置: vision_config.patch_size={patch_size}")
-
 
 def main():
     args = parse_args()
@@ -156,8 +214,12 @@ def main():
     # 设置输出目录
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # 只在主进程打印配置信息
+    # 只在主进程配置模型
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
+        # 设置Q-former配置
+        if args.use_qformer:
+            setup_qformer_config(args.model, args)
+        
         print(f"使用GPU: {args.cuda_visible_devices}")
         print(f"模型路径: {args.model}")
         print(f"数据集路径: {args.dataset}")
@@ -165,69 +227,78 @@ def main():
         print(f"训练轮数: {args.num_train_epochs}")
         print(f"批大小: {args.per_device_train_batch_size}")
         print(f"学习率: {args.learning_rate}")
-        print(f"训练类型: 投影器微调")
+        print(f"训练类型: {'Q-former' if args.use_qformer else 'MLP'} 投影器微调")
         print("-" * 50)
 
-    result = sft_main(
-        TrainArguments(
-            # 模型配置
-            model=args.model,
-            train_type="lora" if args.use_lora else "ALL",
-            # 数据集配置
-            dataset=[args.dataset],
-            # 训练配置
-            num_train_epochs=args.num_train_epochs,
-            per_device_train_batch_size=args.per_device_train_batch_size,
-            per_device_eval_batch_size=args.per_device_eval_batch_size,
-            gradient_accumulation_steps=args.gradient_accumulation_steps,
-            learning_rate=args.learning_rate,
-            weight_decay=args.weight_decay,
-            warmup_ratio=args.warmup_ratio,
-            # 冻结配置 - 只训练投影器
-            freeze_llm=True,
-            freeze_vit=True,
-            freeze_aligner=True if args.use_lora else False,
-            # 精度和优化
-            torch_dtype="bfloat16",
-            fp16=False,
-            bf16=True,
-            dataloader_num_workers=0,
-            # 保存和日志
-            output_dir=args.output_dir,
-            logging_steps=args.logging_steps,
-            save_steps=args.save_steps,
-            eval_steps=args.eval_steps,
-            save_total_limit=args.save_total_limit,
-            eval_strategy="steps",
-            # 分布式训练配置
-            ddp_backend="nccl",
-            ddp_find_unused_parameters=True,
-            # 其他配置
-            seed=args.seed,
-            remove_unused_columns=False,
-            report_to=["tensorboard"],
-            run_name=args.run_name,
-            dataloader_pin_memory=False,
-        )
+    # 构建训练参数
+    train_args = TrainArguments(
+        # 模型配置
+        model=args.model,
+        train_type="lora" if args.use_lora else "full",
+        # 数据集配置
+        dataset=[args.dataset],
+        # 训练配置
+        num_train_epochs=args.num_train_epochs,
+        per_device_train_batch_size=args.per_device_train_batch_size,
+        per_device_eval_batch_size=args.per_device_eval_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        learning_rate=args.learning_rate,
+        weight_decay=args.weight_decay,
+        warmup_ratio=args.warmup_ratio,
+        # 冻结配置
+        freeze_llm=True,
+        freeze_vit=True,
+        # 精度配置
+        bf16=True,
+        fp16=False,
+        # 保存和日志
+        output_dir=args.output_dir,
+        logging_steps=args.logging_steps,
+        save_steps=args.save_steps,
+        eval_steps=args.eval_steps,
+        save_total_limit=args.save_total_limit,
+        eval_strategy="steps",
+        # 分布式训练
+        ddp_backend="nccl",
+        ddp_find_unused_parameters=True,
+        # 其他配置
+        seed=args.seed,
+        dataloader_num_workers=4,
+        remove_unused_columns=False,
+        report_to=["tensorboard"],
+        run_name=args.run_name,
+        # LoRA配置（如果使用）
+        lora_rank=args.lora_rank if args.use_lora else None,
+        lora_alpha=args.lora_alpha if args.use_lora else None,
+        lora_dropout=args.lora_dropout if args.use_lora else None,
     )
+    
+    # 如果使用Q-former，设置特定的训练目标
+    if args.use_qformer:
+        # 对于Q-former，我们主要训练投影器部分
+        train_args.freeze_aligner = False
+    else:
+        # 对于MLP投影器
+        train_args.freeze_aligner = False
+
+    result = sft_main(train_args)
 
     # 只在主进程打印结果
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
-        print("投影器微调完成!")
+        projector_type = "Q-former" if args.use_qformer else "MLP"
+        print(f"{projector_type} 投影器微调完成!")
 
         # 处理训练结果
-        if isinstance(result, dict):
-            checkpoint_dir = result.get("output_dir", args.output_dir)
-            print(f"最佳模型保存在: {checkpoint_dir}")
-
-            if "train_runtime" in result:
-                print(f"训练用时: {result['train_runtime']:.2f} 秒")
-            if "train_loss" in result:
-                print(f"训练损失: {result['train_loss']:.4f}")
-            if "eval_loss" in result:
-                print(f"验证损失: {result['eval_loss']:.4f}")
-        else:
+        if hasattr(result, 'log_history'):
             print(f"最佳模型保存在: {args.output_dir}")
+            if result.log_history:
+                last_log = result.log_history[-1]
+                if "train_loss" in last_log:
+                    print(f"最终训练损失: {last_log['train_loss']:.4f}")
+                if "eval_loss" in last_log:
+                    print(f"最终验证损失: {last_log['eval_loss']:.4f}")
+        else:
+            print(f"训练完成，模型保存在: {args.output_dir}")
 
     return result
 
@@ -235,4 +306,4 @@ def main():
 if __name__ == "__main__":
     result = main()
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
-        print(f"训练结果: {result}")
+        print("训练流程结束")
