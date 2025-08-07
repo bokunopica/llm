@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument(
         "--use_qformer",
         type=bool,
-        default=True,
+        default=False,
         help="Use Q-former instead of MLP projector",
     )
     parser.add_argument(
@@ -229,6 +229,12 @@ def main():
         print(f"学习率: {args.learning_rate}")
         print(f"训练类型: {'Q-former' if args.use_qformer else 'MLP'} 投影器微调")
         print("-" * 50)
+
+
+    print("=============================")
+    print("Model configuration:")
+    print(args.model)
+    print("=============================")
 
     # 构建训练参数
     train_args = TrainArguments(
