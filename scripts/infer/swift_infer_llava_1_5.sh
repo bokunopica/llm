@@ -3,7 +3,8 @@
 
 CUDA_VISIBLE_DEVICES="2"
 INFER_BACKEND="vllm"
-MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6/v2-20250718-172038/checkpoint-410"
+# MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6/v2-20250718-172038/checkpoint-410"
+MODEL="/home/qianq/model/llava-med-v1.5-mistral-7b"
 DATASET="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
 MAX_BATCH_SIZE=16
 MAX_NEW_TOKENS=512

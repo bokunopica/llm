@@ -15,6 +15,9 @@ def parse_args():
     parser.add_argument("--model", type=str,
                        default="/home/qianq/mycodes/llm/results/llava-1.5-7b-hf-swift-lora/v5-20250709-194154/checkpoint-500",
                        help="Model path")
+    parser.add_argument("--model_type", type=str, default="llava1_5_hf",
+                       choices=["llava_llama3_hf", "llava1_5_hf", "pixtral"],
+                       help="Model type for inference")
     parser.add_argument("--dataset", type=str,
                        default="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN",
                        help="Dataset path")
@@ -128,10 +131,9 @@ def inference_multi_gpu_vllm(args):
     gpu_count = len(args.cuda_visible_devices.split(','))
     tensor_parallel_size = min(args.tensor_parallel_size, gpu_count)
     val_dataset_path, dataset_sample = prepare_dataset_config(args.dataset, args.val_dataset_sample)
-
-    
     infer_args = InferArguments(
         model=args.model,
+        model_type=args.model_type,
         infer_backend="vllm",
         
         # VLLM特定配置
