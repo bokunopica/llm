@@ -240,6 +240,7 @@ def main():
     train_args = TrainArguments(
         # 模型配置
         model=args.model,
+        model_type="llava1_5_hf",
         train_type="lora" if args.use_lora else "full",
         # 数据集配置
         dataset=[args.dataset],
