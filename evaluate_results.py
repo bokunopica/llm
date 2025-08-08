@@ -25,10 +25,21 @@ def normalize_label(label):
     """标准化标签，将所有可能的变体转换为统一格式"""
     if isinstance(label, str):
         label = label.lower().strip()
+        
+        # 检查是否包含malignant关键词
+        if any(keyword in label for keyword in ["malignant", "cancer", "malicious", "suspicious"]):
+            return "malignant"
+        
+        # 检查是否包含benign关键词
+        if any(keyword in label for keyword in ["benign", "normal", "healthy", "non-malignant"]):
+            return "benign"
+            
+        # 精确匹配
         if label in ["malignant", "malignant.", "[malignant]"]:
             return "malignant"
         elif label in ["benign", "benign.", "[benign]"]:
             return "benign"
+    
     return label
 
 
@@ -49,11 +60,10 @@ def extract_predictions_and_labels(results):
         # 只有当预测和标签都有效时才添加
         if pred in ["malignant", "benign"] and label in ["malignant", "benign"]:
             predictions.append(pred)
-            labels.append(label)
         else:
-            print(
-                f"跳过无效数据: pred='{result.get('response', '')}', label='{result.get('labels', '')}'"
-            )
+            predictions.append("benign")  # 默认预测为benign
+            print(f"Invalid prediction or label: {pred} | {label}")
+        labels.append(label)
 
     return predictions, labels
 
@@ -310,27 +320,34 @@ def main():
     # )
 
 
+    # print(
+    #     "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6-data-aug ##############"
+    # )
+    # eval(
+    #     os.path.join(
+    #         RESULT_FOLDER,
+    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
+    #         "v1-20250717-111605",
+    #         "checkpoint-2450",
+    #     ),
+    # )
+
+
+    # eval(
+    #     os.path.join(
+    #         RESULT_FOLDER,
+    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
+    #         "v2-20250718-172038",
+    #         "checkpoint-410",
+    #     ),
+    # )
+
+    
     print(
         "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6-data-aug ##############"
     )
-    eval(
-        os.path.join(
-            RESULT_FOLDER,
-            "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-            "v1-20250717-111605",
-            "checkpoint-2450",
-        ),
-    )
+    eval("/home/qianq/model/llava-med-v1.5-mistral-7b")
 
-
-    eval(
-        os.path.join(
-            RESULT_FOLDER,
-            "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-            "v2-20250718-172038",
-            "checkpoint-410",
-        ),
-    )
 
 
 
