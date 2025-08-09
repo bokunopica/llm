@@ -25,21 +25,27 @@ def normalize_label(label):
     """标准化标签，将所有可能的变体转换为统一格式"""
     if isinstance(label, str):
         label = label.lower().strip()
-        
+
         # 检查是否包含malignant关键词
-        if any(keyword in label for keyword in ["malignant", "cancer", "malicious", "suspicious"]):
+        if any(
+            keyword in label
+            for keyword in ["malignant", "cancer", "malicious", "suspicious"]
+        ):
             return "malignant"
-        
+
         # 检查是否包含benign关键词
-        if any(keyword in label for keyword in ["benign", "normal", "healthy", "non-malignant"]):
+        if any(
+            keyword in label
+            for keyword in ["benign", "normal", "healthy", "non-malignant"]
+        ):
             return "benign"
-            
+
         # 精确匹配
         if label in ["malignant", "malignant.", "[malignant]"]:
             return "malignant"
         elif label in ["benign", "benign.", "[benign]"]:
             return "benign"
-    
+
     return label
 
 
@@ -152,6 +158,7 @@ def calculate_class_specific_metrics(predictions, labels):
         },
     }
 
+
 def print_results(metrics, class_metrics):
     """打印结果"""
     print("=" * 60)
@@ -219,9 +226,9 @@ def save_results(metrics, class_metrics, output_file):
     print(f"\n💾 Results saved to: {output_file}")
 
 
-def eval(ckpt_path):
+def eval(input_file):
     # 加载结果
-    input_file = os.path.join(ckpt_path, "inference_results.jsonl")
+
     print(f"Loading results from: {input_file}")
     results = load_jsonl(input_file)
     print(f"Loaded {len(results)} results")
@@ -245,7 +252,7 @@ def eval(ckpt_path):
     save_results(
         metrics,
         class_metrics,
-        output_file=os.path.join(ckpt_path, "evaluation_results.json"),
+        output_file=input_file.replace(".jsonl", "_evaluation.json"),
     )
 
 
@@ -272,7 +279,6 @@ def main():
     #     ),
     # )
 
-
     # print(
     #     "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6 ##############"
     # )
@@ -293,8 +299,6 @@ def main():
     #     ),
     # )
 
-
-    
     # print(
     #     "############## swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-5 ##############"
     # )
@@ -319,7 +323,6 @@ def main():
     #     ),
     # )
 
-
     # print(
     #     "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6-data-aug ##############"
     # )
@@ -332,7 +335,6 @@ def main():
     #     ),
     # )
 
-
     # eval(
     #     os.path.join(
     #         RESULT_FOLDER,
@@ -342,18 +344,11 @@ def main():
     #     ),
     # )
 
-    
-    print(
-        "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6-data-aug ##############"
+    print("############## llava-med en ##############")
+    # eval("/home/qianq/model/llava-med-v1.5-mistral-7b")
+    eval(
+        "/home/qianq/model/llava-med-v1.5-mistral-7b/inference_/home/qianq/mycodes/llm/data/image-text-to-text/lidc-clf-nodule-img/LIDC-IDRI-MLLM-CLF-EN-ATTRS.jsonl"
     )
-    eval("/home/qianq/model/llava-med-v1.5-mistral-7b")
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
