@@ -159,71 +159,29 @@ def calculate_class_specific_metrics(predictions, labels):
     }
 
 
-def print_results(metrics, class_metrics):
+# def print_results(metrics, class_metrics=None):
+def print_results(metrics):
     """打印结果"""
-    print("=" * 60)
-    print("EVALUATION RESULTS")
-    print("=" * 60)
+    # print("=" * 60)
+    # print("EVALUATION RESULTS")
+    # print("=" * 60)
 
-    print(f"\n📊 OVERALL METRICS:")
-    print(f"Accuracy:  {metrics['accuracy']:.4f} ({metrics['accuracy']*100:.2f}%)")
-    print(f"Precision: {metrics['precision']:.4f} ({metrics['precision']*100:.2f}%)")
-    print(f"Recall:    {metrics['recall']:.4f} ({metrics['recall']*100:.2f}%)")
-    print(f"F1 Score:  {metrics['f1_score']:.4f} ({metrics['f1_score']*100:.2f}%)")
+    # print(f"\n📊 OVERALL METRICS:")
+    # print(f"Accuracy:  {metrics['accuracy']:.4f} ({metrics['accuracy']*100:.2f}%)")
+    # print(f"Precision: {metrics['precision']:.4f} ({metrics['precision']*100:.2f}%)")
+    # print(f"Recall:    {metrics['recall']:.4f} ({metrics['recall']*100:.2f}%)")
+    # print(f"F1 Score:  {metrics['f1_score']:.4f} ({metrics['f1_score']*100:.2f}%)")
 
-    print(f"\n🔍 CONFUSION MATRIX:")
-    cm = class_metrics["confusion_matrix"]
-    print(f"                 Predicted")
-    print(f"                 Benign  Malignant")
-    print(f"Actual  Benign   {cm['true_negative']:6d}  {cm['false_positive']:9d}")
-    print(f"        Malignant{cm['false_negative']:6d}  {cm['true_positive']:9d}")
+    # print(f"\n🔍 CONFUSION MATRIX:")
+    # cm = class_metrics["confusion_matrix"]
+    # print(f"                 Predicted")
+    # print(f"                 Benign  Malignant")
+    # print(f"Actual  Benign   {cm['true_negative']:6d}  {cm['false_positive']:9d}")
+    # print(f"        Malignant{cm['false_negative']:6d}  {cm['true_positive']:9d}")
 
     print(f"\n📋 DETAILED CLASSIFICATION REPORT:")
     print(metrics["classification_report"])
-
-
-def save_results(metrics, class_metrics, output_file):
-    """保存结果到文件"""
-    results = {
-        "overall_metrics": {
-            "accuracy": float(metrics["accuracy"]),
-            "precision": float(metrics["precision"]),
-            "recall": float(metrics["recall"]),
-            "f1_score": float(metrics["f1_score"]),
-        },
-        "dataset_statistics": {
-            "total_samples": int(metrics["total_samples"]),
-            "true_malignant": int(metrics["true_malignant"]),
-            "true_benign": int(metrics["true_benign"]),
-            "pred_malignant": int(metrics["pred_malignant"]),
-            "pred_benign": int(metrics["pred_benign"]),
-        },
-        "class_specific_metrics": {
-            "malignant": {
-                "precision": float(class_metrics["malignant"]["precision"]),
-                "recall": float(class_metrics["malignant"]["recall"]),
-                "f1_score": float(class_metrics["malignant"]["f1_score"]),
-                "support": int(class_metrics["malignant"]["support"]),
-            },
-            "benign": {
-                "precision": float(class_metrics["benign"]["precision"]),
-                "recall": float(class_metrics["benign"]["recall"]),
-                "f1_score": float(class_metrics["benign"]["f1_score"]),
-                "support": int(class_metrics["benign"]["support"]),
-            },
-        },
-        "confusion_matrix": {
-            "true_negative": int(class_metrics["confusion_matrix"]["true_negative"]),
-            "false_positive": int(class_metrics["confusion_matrix"]["false_positive"]),
-            "false_negative": int(class_metrics["confusion_matrix"]["false_negative"]),
-            "true_positive": int(class_metrics["confusion_matrix"]["true_positive"]),
-        },
-    }
-
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
-
-    print(f"\n💾 Results saved to: {output_file}")
+    print(type(metrics["classification_report"]))
 
 
 def eval(input_file):
@@ -243,42 +201,32 @@ def eval(input_file):
 
     # 计算指标
     metrics = calculate_metrics(predictions, labels)
-    class_metrics = calculate_class_specific_metrics(predictions, labels)
+    calculate_class_specific_metrics(predictions, labels)
+
 
     # 打印结果
-    print_results(metrics, class_metrics)
+    # print_results(metrics, class_metrics)
+    print_results(metrics)
 
-    # 保存结果
-    save_results(
-        metrics,
-        class_metrics,
-        output_file=input_file.replace(".jsonl", "_evaluation.json"),
-    )
+    # # 保存结果
+    # save_results(
+    #     metrics,
+    #     class_metrics,
+    #     output_file=input_file.replace(".jsonl", "_evaluation.json"),
+    # )
 
 
 def main():
-    RESULT_FOLDER = "/home/qianq/mycodes/llm/results/"
-    eval(
-        os.path.join(
-            RESULT_FOLDER,
-            "swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6-DATASET=LIDC-IDRI-MLLM-CLF-EN",
-            "v1-20250809-200334",
-            "checkpoint-820",
-            "inference_LIDC-IDRI-MLLM-CLF-EN.jsonl",
-        )
-    )
-    eval(
-        os.path.join(
-            RESULT_FOLDER,
-            "swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6-DATASET=LIDC-IDRI-MLLM-CLF-EN-ATTRS",
-            "v2-20250809-200642",
-            "checkpoint-820",
-            "inference_LIDC-IDRI-MLLM-CLF-EN-ATTRS.jsonl",
-        )
-    )
-    
+    import argparse
 
-
+    argparse.parser = argparse.ArgumentParser(description="Evaluate inference results")
+    argparse.parser.add_argument(
+        "--input_file",
+        type=str,
+        required=True,
+        help="Path to the input JSONL file containing inference results",
+    )
+    eval(argparse.parser.parse_args().input_file)
 
 
 if __name__ == "__main__":
