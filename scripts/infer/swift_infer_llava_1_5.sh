@@ -3,9 +3,9 @@
 
 CUDA_VISIBLE_DEVICES="3"
 INFER_BACKEND="vllm"
-MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6/v1-20250809-200334/checkpoint-820"
+MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6-DATASET=LIDC-IDRI-MLLM-CLF-EN-ATTRS/v2-20250809-200642/checkpoint-820"
 
-DATASET_NAME="LIDC-IDRI-MLLM-CLF-EN"
+DATASET_NAME="LIDC-IDRI-MLLM-CLF-EN-ATTRS"
 DATASET="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img/${DATASET_NAME}"
 MAX_BATCH_SIZE=16
 MAX_NEW_TOKENS=512

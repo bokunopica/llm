@@ -68,7 +68,7 @@ def extract_predictions_and_labels(results):
             predictions.append(pred)
         else:
             predictions.append("benign")  # 默认预测为benign
-            print(f"Invalid prediction or label: {pred} | {label}")
+            # print(f"Invalid prediction or label: {pred} | {label}")
         labels.append(label)
 
     return predictions, labels
@@ -258,97 +258,27 @@ def eval(input_file):
 
 def main():
     RESULT_FOLDER = "/home/qianq/mycodes/llm/results/"
-
-    # print(
-    #     "############## swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5 ##############"
-    # )
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5",
-    #         "v0-20250710-154830",
-    #         "checkpoint-250",
-    #     ),
-    # )
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-projector-llava-1.5-7b-hf-epoch=5-lr=1e-5",
-    #         "v0-20250710-154830",
-    #         "checkpoint-410",
-    #     ),
-    # )
-
-    # print(
-    #     "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6 ##############"
-    # )
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-    #         "v1-20250711-140224",
-    #         "checkpoint-250",
-    #     ),
-    # )
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-    #         "v1-20250711-140224",
-    #         "checkpoint-410",
-    #     ),
-    # )
-
-    # print(
-    #     "############## swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-5 ##############"
-    # )
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-5",
-    #         "v9-20250712-151244",
-    #         "checkpoint-410",
-    #     ),
-    # )
-
-    # print(
-    #     "############## swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-6 ##############"
-    # )
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-llava1_6-mistral-7b-instruct-EOPCH=5-LR=1e-6",
-    #         "v10-20250713-102834",
-    #         "checkpoint-410",
-    #     ),
-    # )
-
-    # print(
-    #     "############## swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6-data-aug ##############"
-    # )
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-    #         "v1-20250717-111605",
-    #         "checkpoint-2450",
-    #     ),
-    # )
-
-    # eval(
-    #     os.path.join(
-    #         RESULT_FOLDER,
-    #         "swift-projector-llava-1.5-7b-hf-EPOCH=5-LR=1e-6",
-    #         "v2-20250718-172038",
-    #         "checkpoint-410",
-    #     ),
-    # )
-
-    print("############## llava-med en ##############")
-    # eval("/home/qianq/model/llava-med-v1.5-mistral-7b")
     eval(
-        "/home/qianq/model/llava-med-v1.5-mistral-7b/inference_/home/qianq/mycodes/llm/data/image-text-to-text/lidc-clf-nodule-img/LIDC-IDRI-MLLM-CLF-EN-ATTRS.jsonl"
+        os.path.join(
+            RESULT_FOLDER,
+            "swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6-DATASET=LIDC-IDRI-MLLM-CLF-EN",
+            "v1-20250809-200334",
+            "checkpoint-820",
+            "inference_LIDC-IDRI-MLLM-CLF-EN.jsonl",
+        )
     )
+    eval(
+        os.path.join(
+            RESULT_FOLDER,
+            "swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6-DATASET=LIDC-IDRI-MLLM-CLF-EN-ATTRS",
+            "v2-20250809-200642",
+            "checkpoint-820",
+            "inference_LIDC-IDRI-MLLM-CLF-EN-ATTRS.jsonl",
+        )
+    )
+    
+
+
 
 
 if __name__ == "__main__":
