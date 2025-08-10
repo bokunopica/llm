@@ -12,6 +12,13 @@ get_free_port() {
     done
 }
 
+# 计算GPU数量
+count_gpus() {
+    local gpu_string=$1
+    # 移除空格并按逗号分割计算数量
+    echo "$gpu_string" | tr ',' '\n' | wc -l
+}
+
 # 参数检查
 if [ $# -ne 2 ]; then
     echo "错误: 必须提供两个参数！"
@@ -22,13 +29,14 @@ fi
 CUDA_VISIBLE_DEVICES=$1
 DATASET_SUFFIX=$2
 MASTER_PORT=$(get_free_port)   # 动态获取可用端口
+GPU_COUNT=$(count_gpus "$CUDA_VISIBLE_DEVICES")
 
 MODEL_NAME="llava-med-v1.5-mistral-7b"
 MODEL="/home/qianq/model/${MODEL_NAME}"
 DATASET_PREFIX="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice/"
 DATASET="${DATASET_PREFIX}${DATASET_SUFFIX}"
 
-NUM_TRAIN_EPOCHS=5
+NUM_TRAIN_EPOCHS=1
 TRAIN_BATCH_SIZE=4
 EVAL_BATCH_SIZE=4
 GRADIENT_ACCUMULATION_STEPS=16
@@ -64,8 +72,7 @@ echo "================================="
 mkdir -p "$OUTPUT_DIR"
 export CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
 
-# 固定单GPU
-torchrun --master-port=$MASTER_PORT --nproc_per_node=1 finetune_projector.py \
+python finetune_projector.py \
     --cuda_visible_devices "$CUDA_VISIBLE_DEVICES" \
     --model "$MODEL" \
     --dataset "$DATASET" \

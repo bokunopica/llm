@@ -1,24 +1,25 @@
 #!/bin/bash
 # VLLM 高性能推理
 
-# 参数检查
-if [ $# -ne 2 ]; then
-    echo "错误: 必须提供两个参数！"
-    echo "用法: $0 <CUDA_VISIBLE_DEVICES> <DATASET_NAME>"
-    echo "示例:"
-    echo "  $0 0 lidc"
-    echo "  $0 1 lidc-v2"
-    exit 1
-fi
+# # 参数检查
+# if [ $# -ne 2 ]; then
+#     echo "错误: 必须提供两个参数！"
+#     echo "用法: $0 <CUDA_VISIBLE_DEVICES> <DATASET_NAME>"
+#     echo "示例:"
+#     echo "  $0 0 lidc"
+#     echo "  $0 1 lidc-v2"
+#     exit 1
+# fi
 
 # 读取参数
-CUDA_VISIBLE_DEVICES=$1
-DATASET_NAME=$2
+# CUDA_VISIBLE_DEVICES=$1
+# DATASET_NAME=$2
+CUDA_VISIBLE_DEVICES="3"
+DATASET_NAME="attr-lidc"
 
 # 固定推理配置
 INFER_BACKEND="vllm"
-# MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6-DATASET=LIDC-IDRI-MLLM-CLF-EN-ATTRS/v2-20250809-200642/checkpoint-820"
-MODEL="/home/qianq/model/llava-med-v1.5-mistral-7b"
+MODEL="/home/qianq/mycodes/llm/results/swift-projector-llava-med-v1.5-mistral-7b-EPOCH=5-LR=1e-6-DATASET=attr-lidc/v0-20250810-203841/checkpoint-820"
 DATASET_PREFIX="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice/"
 DATASET="${DATASET_PREFIX}${DATASET_NAME}"
 

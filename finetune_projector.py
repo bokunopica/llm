@@ -253,7 +253,7 @@ def main():
         weight_decay=args.weight_decay,
         warmup_ratio=args.warmup_ratio,
         # 冻结配置
-        freeze_llm=True,
+        freeze_llm=False,
         freeze_vit=True,
         # 精度配置
         bf16=True,
