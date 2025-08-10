@@ -270,7 +270,7 @@ def main():
         ddp_find_unused_parameters=True,
         # 其他配置
         seed=args.seed,
-        dataloader_num_workers=4,
+        dataloader_num_workers=0,
         remove_unused_columns=False,
         report_to=["tensorboard"],
         run_name=args.run_name,

@@ -1,10 +1,14 @@
 #!/bin/bash
 
 # 设置参数
-CUDA_VISIBLE_DEVICES="2"
+CUDA_VISIBLE_DEVICES="3"
 MODEL_NAME="llava-med-v1.5-mistral-7b"
 MODEL="/home/qianq/model/${MODEL_NAME}"
-DATASET="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN"
+# 将 DATASET 变量拆分为前缀和后缀
+DATASET_PREFIX="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img/"
+DATASET_SUFFIX="LIDC-IDRI-MLLM-CLF-EN"
+# 组合成完整的 DATASET 路径
+DATASET="${DATASET_PREFIX}${DATASET_SUFFIX}"
 
 NUM_TRAIN_EPOCHS=5
 TRAIN_BATCH_SIZE=4
