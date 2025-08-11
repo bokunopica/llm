@@ -1,4 +1,5 @@
 MAX_PIXELS=1003520 \
+MODEL_PREFIX=/home/qianq/model/ \
 MODEL=/home/qianq/model/llava-med-v1.5-mistral-7b \
 EPOCH=1 \
 DATASET_PREFIX=/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice/ \
@@ -21,7 +22,7 @@ CUDA_VISIBLE_DEVICES=1,3 swift sft \
     --gradient_accumulation_steps 16 \
     --eval_steps 100 \
     --save_steps 100 \
-    --save_total_limit 2 \
+    --save_total_limit 1 \
     --logging_steps 5 \
     --max_length 2048 \
     --output_dir output \
