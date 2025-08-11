@@ -1,20 +1,18 @@
-# 2 * 76GiB
-CUDA_VISIBLE_DEVICES=1,3 \
 MAX_PIXELS=1003520 \
 MODEL=/home/qianq/model/llava-med-v1.5-mistral-7b \
 EPOCH=1 \
 DATASET_PREFIX=/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice/ \
 DATASET_NAME=attr-lidc \
 
-swift sft \
+CUDA_VISIBLE_DEVICES=1,3 swift sft \
     --model /home/qianq/model/llava-med-v1.5-mistral-7b \
-    --dataset '/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice/lidc' \
+    --dataset /home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice/${DATASET_NAME} \
     --split_dataset_ratio 0.01 \
     --train_type lora \
     --torch_dtype bfloat16 \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
-    --per_device_eval_batch_size 2 \
+    --per_device_train_batch_size 4 \
+    --per_device_eval_batch_size 4 \
     --learning_rate 1e-4 \
     --lora_rank 8 \
     --lora_alpha 32 \
