@@ -83,14 +83,20 @@ class TrainPipeline:
             raise FileNotFoundError(f"数据集路径不存在: {dataset_path}")
 
         # 找最新的 checkpoint
-        checkpoints = sorted(
-            [
-                os.path.join(output_dir, d)
-                for d in os.listdir(output_dir)
-                if "checkpoint" in d
-            ],
-            key=os.path.getmtime,
-        )
+        version_folders: list = os.listdir(output_dir)
+        if not version_folders:
+            raise RuntimeError(f"输出目录不存在任何版本文件: {output_dir}")
+        else:
+            version_folders.sort(reverse=True)
+            base_folder = os.path.join(output_dir, version_folders[0])
+            checkpoints = sorted(
+                [
+                    os.path.join(base_folder, d)
+                    for d in os.listdir(base_folder)
+                    if "checkpoint" in d
+                ],
+                key=os.path.getmtime,
+            )
         if not checkpoints:
             raise RuntimeError("未找到 checkpoint，请检查训练是否完成")
         latest_ckpt = checkpoints[-1]
@@ -112,7 +118,6 @@ class TrainPipeline:
             "--result_path": result_path,
             "--metric": self.metric,
         }
-
         infer_cmd = ["python", "inference.py"]
         for k, v in infer_params.items():
             infer_cmd += [k, v]
