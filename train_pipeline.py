@@ -10,15 +10,18 @@ class TrainPipeline:
     def __init__(
         self,
         base_model,
+        model_type,
         epoch=1,
         lr="1e-4",
         dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
         dataset_name="attr-lidc",  # attr-lidc | lidc
-        cuda_devices="1,3",
+        # 默认全部gpu
+        cuda_devices=None,
     ):
         # ===== 配置区域 =====
         self.max_pixels = 1003520
         self.model = base_model
+        self.model_type = model_type
         self.epoch = epoch
         self.lr = lr
         self.dataset_prefix = dataset_prefix
@@ -35,11 +38,12 @@ class TrainPipeline:
         self.tensor_parallel_size = 1
         self.metric = "acc"
 
-    def run_train(self):
+    def run_train(self) -> str:
         os.environ["CUDA_VISIBLE_DEVICES"] = self.cuda_devices
         # 用 dict 管理参数
         train_params = {
             "--model": self.model,
+            # "--model_type": self.model_type,
             "--dataset": f"{self.dataset_prefix}/{self.dataset_name}",
             "--split_dataset_ratio": "0.01",
             "--train_type": "lora",
@@ -106,23 +110,28 @@ class TrainPipeline:
         print("=== 开始推理 ===")
         infer_params = {
             "--cuda_visible_devices": self.cuda_devices,
-            "--infer_backend": self.infer_backend,
-            "--model": latest_ckpt,
-            "--dataset": dataset_path,
-            "--max_batch_size": str(self.max_batch_size),
-            "--max_new_tokens": str(self.max_new_tokens),
-            "--temperature": str(self.temperature),
-            "--top_p": str(self.top_p),
-            "--write_batch_size": str(self.write_batch_size),
-            "--tensor_parallel_size": str(self.tensor_parallel_size),
+            # "--model": self.model,
+            # "--model_type": self.model_type,
+            "--adapters": latest_ckpt,
+            "--dataset": f"{self.dataset_prefix}/{self.dataset_name}",
             "--result_path": result_path,
-            "--metric": self.metric,
+            "--infer_backend": "pt",
+            "--max_batch_size": "8",
+            "--max_new_tokens": "512",
+            "--temperature": "0",
+            "--top_p": "0.9",
+            "--val_dataset_sample": "-1",
+            "--write_batch_size": "32",
+            "--tensor_parallel_size": "1",
+            "--pipeline_parallel_size": "1",
+            "--metric": "acc",
         }
         infer_cmd = ["python", "inference.py"]
         for k, v in infer_params.items():
             infer_cmd += [k, v]
 
         subprocess.run(infer_cmd, check=True)
+        return result_path
 
     def run_eval(self, result_path):
         """
@@ -136,19 +145,25 @@ class TrainPipeline:
         eval_cmd = ["python", "evaluate_results.py", "--input_file", result_path]
         subprocess.run(eval_cmd, check=True)
 
+    def run(self):
+        output_dir = pipeline.run_train()
+        result_path = pipeline.run_infer(output_dir)
+        pipeline.run_eval(result_path)
 
 
-# ===== 主流程 =====
 if __name__ == "__main__":
     start_time = time.time()
+
     pipeline = TrainPipeline(
         base_model="llava-1.5-hf/llava-1.5-7b",
-        epoch=1,
-        lr="1e-4",
+        model_type="llava1_5_hf",
         dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
-        dataset_name="attr-lidc",
-        cuda_devices="0,1,2,3",
+        dataset_name="lidc",
+        cuda_devices="2,3",
     )
-    pipeline.run_infer("/home/qianq/mycodes/llm/results/llava-med-v1.5-mistral-7b-EPOCH=1-LR=-DATASET=lidc")
+    # pipeline.run()
+    pipeline.run_eval(
+        "/home/qianq/mycodes/llm/results/llava-med-v1.5-mistral-7b-EPOCH=1-LR=-DATASET=lidc/v1-20250811-062622/checkpoint-323/inference_attr-lidc.jsonl"
+    )
 
     print(f"=== Pipeline 完成，总耗时: {time.time() - start_time:.1f} 秒 ===")
