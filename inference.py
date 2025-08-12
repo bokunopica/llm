@@ -170,7 +170,7 @@ def main():
         infer_args = InferArguments(
             model=args.model,
             model_type=args.model_type,
-            adapters=args.adapters,
+            # adapters=args.adapters,
             infer_backend=args.infer_backend,
             max_batch_size=args.max_batch_size,
             max_new_tokens=args.max_new_tokens,
