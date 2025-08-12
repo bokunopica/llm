@@ -90,7 +90,7 @@ def calculate_metrics(predictions, labels):
     cm = confusion_matrix(y_true, y_pred)
 
     # 详细的分类报告
-    report = classification_report(y_true, y_pred, target_names=["benign", "malignant"])
+    report = classification_report(y_true, y_pred, target_names=["benign", "malignant"], digits=5)
 
     return {
         "accuracy": accuracy,
@@ -162,15 +162,15 @@ def calculate_class_specific_metrics(predictions, labels):
 # def print_results(metrics, class_metrics=None):
 def print_results(metrics):
     """打印结果"""
-    # print("=" * 60)
-    # print("EVALUATION RESULTS")
-    # print("=" * 60)
+    print("=" * 60)
+    print("EVALUATION RESULTS")
+    print("=" * 60)
 
-    # print(f"\n📊 OVERALL METRICS:")
-    # print(f"Accuracy:  {metrics['accuracy']:.4f} ({metrics['accuracy']*100:.2f}%)")
-    # print(f"Precision: {metrics['precision']:.4f} ({metrics['precision']*100:.2f}%)")
-    # print(f"Recall:    {metrics['recall']:.4f} ({metrics['recall']*100:.2f}%)")
-    # print(f"F1 Score:  {metrics['f1_score']:.4f} ({metrics['f1_score']*100:.2f}%)")
+    print(f"\n📊 OVERALL METRICS:")
+    print(f"Accuracy:  {metrics['accuracy']:.4f} ({metrics['accuracy']*100:.2f}%)")
+    print(f"Precision: {metrics['precision']:.4f} ({metrics['precision']*100:.2f}%)")
+    print(f"Recall:    {metrics['recall']:.4f} ({metrics['recall']*100:.2f}%)")
+    print(f"F1 Score:  {metrics['f1_score']:.4f} ({metrics['f1_score']*100:.2f}%)")
 
     # print(f"\n🔍 CONFUSION MATRIX:")
     # cm = class_metrics["confusion_matrix"]
