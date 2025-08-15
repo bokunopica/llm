@@ -63,7 +63,7 @@ class TrainPipeline:
     def __init__(
         self,
         base_model,
-        model_type,
+        model_type="llava1_5_hf",
         epoch=1,
         lr="1e-4",
         dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
@@ -83,14 +83,12 @@ class TrainPipeline:
         self.cuda_devices = cuda_devices
 
         # 推理相关
-        self.infer_backend = "vllm"
         self.max_batch_size = 16
         self.max_new_tokens = 512
-        self.temperature = 0.7
+        self.temperature = 0
         self.top_p = 0.9
-        self.write_batch_size = 64
+        self.write_batch_size = 1024
         self.tensor_parallel_size = 1
-        self.metric = "acc"
         self.is_raw_model = is_raw_model
 
     def _build_env(self) -> Dict[str, str]:
@@ -187,13 +185,13 @@ class TrainPipeline:
             "--dataset": dataset_path,
             "--result_path": result_path,
             "--infer_backend": "pt",
-            "--max_batch_size": "8",
-            "--max_new_tokens": "512",
-            "--temperature": "0",
-            "--top_p": "0.9",
+            "--max_batch_size": str(self.max_batch_size),
+            "--max_new_tokens": str(self.max_new_tokens),
+            "--temperature": str(self.temperature),
+            "--top_p": str(self.top_p),
+            "--write_batch_size": str(self.write_batch_size),
             "--val_dataset_sample": "-1",
-            "--write_batch_size": "32",
-            "--tensor_parallel_size": "1",
+            "--tensor_parallel_size": str(self.tensor_parallel_size),
             "--pipeline_parallel_size": "1",
             "--metric": "acc",
         }
