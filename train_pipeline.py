@@ -575,8 +575,9 @@ def main_0815_05():
 if __name__ == "__main__":
     # main_0813_night()
     # main_0814()
-    CUDA_VISIBLE_DEVICES = "0,1"
     # main_0815_01()
     # main_0815_03()
-    main_0815_04()
+    # main_0815_04()
+    wait_until(construct_train_time(hour=7))
+    CUDA_VISIBLE_DEVICES = "0,1"
     main_0815_05()
