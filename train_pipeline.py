@@ -397,8 +397,6 @@ def main_0815_01():
     run_pipelines(pipelines)
 
 
-
-
 def main_0815_02():
     global CUDA_VISIBLE_DEVICES
     base_model = "/home/qianq/model/QoQ-Med-VL-7B"
@@ -441,9 +439,144 @@ def main_0815_02():
     run_pipelines(pipelines)
 
 
+def main_0815_03():
+    global CUDA_VISIBLE_DEVICES
+    base_model = "/home/qianq/model/llava-med-v1.5-mistral-7b"
+    model_type = "llava1_5_hf"
+    setup_logging(log_dir="logs/llava-med-sft-1epoch")
+
+    # inference_lidc-clf-nodule-ct-slice_lidc
+    TrainPipeline(
+        base_model=base_model,
+        model_type=model_type,
+        epoch=1,
+        dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+        dataset_name="lidc",
+        cuda_devices=CUDA_VISIBLE_DEVICES,
+    ).run_eval(
+        "/home/qianq/mycodes/llm/results/llava-med-v1.5-mistral-7b-EPOCH=1-LR=1e-4-DATASET=lidc/v1-20250813-141407/checkpoint-162/inference_lidc-clf-nodule-ct-slice_lidc.jsonl"
+    )
+
+    # inference_lidc-clf-nodule-ct-slice_attr-lidc
+    TrainPipeline(
+        base_model=base_model,
+        model_type=model_type,
+        epoch=1,
+        dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+        dataset_name="lidc",
+        cuda_devices=CUDA_VISIBLE_DEVICES,
+    ).run_eval(
+        "/home/qianq/mycodes/llm/results/llava-med-v1.5-mistral-7b-EPOCH=1-LR=1e-4-DATASET=attr-lidc/v1-20250813-153248/checkpoint-162/inference_lidc-clf-nodule-ct-slice_attr-lidc.jsonl"
+    )
+
+    pipelines = [
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+    ]
+    run_pipelines(pipelines)
+
+def main_0815_04():
+    global CUDA_VISIBLE_DEVICES
+    base_model = "/home/qianq/model/llava-1.5-7b-hf"
+    model_type = "llava1_5_hf"
+    setup_logging(log_dir="logs/llava-sft-1epoch")
+    pipelines = [
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+    ]
+    run_pipelines(pipelines)
+
+def main_0815_05():
+    global CUDA_VISIBLE_DEVICES
+    base_model = "/home/qianq/model/QoQ-Med-VL-7B"
+    model_type = "qwen2_5_vl"
+    setup_logging(log_dir="logs/QoQ-Med-VL-7B-sft-1epoch")
+    pipelines = [
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+    ]
+    run_pipelines(pipelines)
+
+
 if __name__ == "__main__":
     # main_0813_night()
     # main_0814()
     CUDA_VISIBLE_DEVICES = "0,1"
     # main_0815_01()
-    main_0815_02()
+    # main_0815_03()
+    main_0815_04()
+    main_0815_05()
