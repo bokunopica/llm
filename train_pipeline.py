@@ -1,13 +1,7 @@
 import time
 from logger import setup_logging
 from pipeline import TrainPipeline
-import os
-import sys
-
-
-
-
-
+from typing import List
 
 
 def construct_train_time(hour, minute=0, second=0):
@@ -31,6 +25,24 @@ def wait_until(next_run_time):
         if current_time >= next_run_time:
             break
         time.sleep(300)  # 每5分钟检查一次
+
+
+def run_pipeline(pipeline: TrainPipeline):
+    """运行单个训练管道"""
+    print(f"=== 开始执行 Pipeline ===")
+    try:
+        pipeline.run()
+    except Exception as e:
+        print(f"❌ 运行出错: {e}")
+    print(f"=== Pipeline 完成 ===")
+
+
+def run_pipelines(pipelines: List[TrainPipeline]):
+    """运行多个训练管道"""
+    for i, pipeline in enumerate(pipelines, start=1):
+        print(f"=== 开始执行 Pipeline {i} ===")
+        run_pipeline(pipeline)
+        print(f"=== Pipeline {i} 完成 ===")
 
 
 def main_0813():
@@ -152,8 +164,6 @@ def main_0813():
             cuda_devices="2,3",
             is_raw_model=True,  # 直接使用原始模型进行推理
         ),
-
-
         # # 数据类型：肺结节放大图像
         # # 训练模型：llava-1.5-7b-hf
         # # 结节特征：×
@@ -174,9 +184,6 @@ def main_0813():
         #     dataset_name="LIDC-IDRI-MLLM-CLF-EN-ATTRS",
         #     cuda_devices="2,3",
         # ),
-
-
-
         # # 数据类型：CT切片+肺结节目标框
         # # 训练模型：llava-1.5-7b-hf
         # # 结节特征：×
@@ -217,7 +224,6 @@ def main_0813_night():
     pipelines = [
         #####
         # llava-1.5-7b-hf
-
         # 数据类型：CT切片+肺结节目标框
         # 训练模型：llava-1.5-7b-hf（原始模型不训练）
         # 结节特征：×
@@ -258,11 +264,9 @@ def main_0814():
     wait_until(construct_train_time(hour=7))
 
     pipelines = [
-        
         #####
         # llava-1.5-7b-hf
         #####
-
         # 数据类型：肺结节放大图像
         # 训练模型：llava-1.5-7b-hf
         # 结节特征：×
@@ -283,9 +287,6 @@ def main_0814():
             dataset_name="attr-lidc",
             cuda_devices="2,3",
         ),
-
-
-
         # 数据类型：CT切片+肺结节目标框
         # 训练模型：llava-1.5-7b-hf
         # 结节特征：×
@@ -327,14 +328,122 @@ def main_0815_00():
         dataset_name="lidc",
         cuda_devices="0,1",
     )
-    llava_med_eval_pipeline.run_eval('/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-img_lidc.jsonl')
-    llava_med_eval_pipeline.run_eval('/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-img_attr-lidc.jsonl')
-    llava_med_eval_pipeline.run_eval('/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-ct-slice_lidc.jsonl')
-    llava_med_eval_pipeline.run_eval('/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-ct-slice_attr-lidc.jsonl')
+    llava_med_eval_pipeline.run_eval(
+        "/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-img_lidc.jsonl"
+    )
+    llava_med_eval_pipeline.run_eval(
+        "/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-img_attr-lidc.jsonl"
+    )
+    llava_med_eval_pipeline.run_eval(
+        "/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-ct-slice_lidc.jsonl"
+    )
+    llava_med_eval_pipeline.run_eval(
+        "/home/qianq/model/llava-med-v1.5-mistral-7b/inference_lidc-clf-nodule-ct-slice_attr-lidc.jsonl"
+    )
 
-    
+
+def main_0815_01():
+    # llava-1.5-7b-hf直接推理+eval
+    global CUDA_VISIBLE_DEVICES
+    setup_logging(log_dir="logs/llava-1.5-7b-hf-zero-shot")
+    pipelines = [
+        # llava-1.5-7b-hf
+        #####
+        # 数据类型：肺结节放大图像
+        # 训练模型：llava-1.5-7b-hf（原始模型不训练）
+        # 结节特征：×
+        TrainPipeline(
+            base_model="/home/qianq/model/llava-1.5-7b-hf",
+            model_type="llava1_5_hf",
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+        # 数据类型：肺结节放大图像
+        # 训练模型：llava-1.5-7b-hf（原始模型不训练）
+        # 结节特征：√
+        TrainPipeline(
+            base_model="/home/qianq/model/llava-1.5-7b-hf",
+            model_type="llava1_5_hf",
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+        # 数据类型：CT切片+肺结节目标框
+        # 训练模型：llava-1.5-7b-hf（原始模型不训练）
+        # 结节特征：×
+        TrainPipeline(
+            base_model="/home/qianq/model/llava-1.5-7b-hf",
+            model_type="llava1_5_hf",
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+        # 数据类型：CT切片+肺结节目标框
+        # 训练模型：llava-1.5-7b-hf（原始模型不训练）
+        # 结节特征：√
+        TrainPipeline(
+            base_model="/home/qianq/model/llava-1.5-7b-hf",
+            model_type="llava1_5_hf",
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+    ]
+    run_pipelines(pipelines)
+
+
+
+
+def main_0815_02():
+    global CUDA_VISIBLE_DEVICES
+    base_model = "/home/qianq/model/QoQ-Med-VL-7B"
+    model_type = "qwen2_5_vl"
+    setup_logging(log_dir="logs/QoQ-Med-VL-7B-zero-shot")
+    pipelines = [
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-img",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="attr-lidc",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+            is_raw_model=True,  # 直接使用原始模型进行推理
+        ),
+    ]
+    run_pipelines(pipelines)
+
 
 if __name__ == "__main__":
     # main_0813_night()
     # main_0814()
-    main_0815_00()
+    CUDA_VISIBLE_DEVICES = "0,1"
+    # main_0815_01()
+    main_0815_02()

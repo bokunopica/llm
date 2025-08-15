@@ -31,7 +31,6 @@ def parse_args():
         "--model_type",
         type=str,
         default="",
-        choices=["llava_llama3_hf", "llava1_5_hf", "pixtral", ""],
         help="Model type for inference",
     )
     parser.add_argument(
@@ -63,7 +62,7 @@ def parse_args():
         help="Number of samples for validation, -1 means all",
     )
     parser.add_argument(
-        "--write_batch_size", type=int, default=32, help="Write batch size"
+        "--write_batch_size", type=int, default=1024, help="Write batch size"
     )
 
     # 分布式配置
