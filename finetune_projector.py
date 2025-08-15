@@ -25,6 +25,10 @@ def parse_args():
         help="Model path",
     )
     parser.add_argument(
+        "--model_type",
+        type=str,
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default="/home/qianq/mycodes/llm/data/image-text-to-text/LIDC-IDRI-MLLM-CLF-EN",
@@ -240,7 +244,7 @@ def main():
     train_args = TrainArguments(
         # 模型配置
         model=args.model,
-        model_type="llava1_5_hf",
+        model_type=args.model_type,
         train_type="lora" if args.use_lora else "full",
         # 数据集配置
         dataset=[args.dataset],

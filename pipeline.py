@@ -63,7 +63,7 @@ class TrainPipeline:
     def __init__(
         self,
         base_model,
-        model_type="llava1_5_hf",
+        model_type,
         epoch=1,
         lr="1e-4",
         dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
@@ -106,7 +106,7 @@ class TrainPipeline:
         # 用 dict 管理参数
         train_params = {
             "--model": self.model,
-            # "--model_type": self.model_type,
+            "--model_type": self.model_type,
             "--dataset": f"{self.dataset_prefix}/{self.dataset_name}",
             "--split_dataset_ratio": "0.01",
             "--train_type": "lora",
@@ -127,7 +127,6 @@ class TrainPipeline:
             "--max_length": "2048",
             "--warmup_ratio": "0.05",
             "--dataloader_num_workers": "0",
-            "--model_type": "llava1_5_hf",
             "--output_dir": f"results/{os.path.basename(self.model)}-EPOCH={self.epoch}-LR={self.lr}-DATASET={self.dataset_name}",
         }
         # 展开成列表

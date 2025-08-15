@@ -15,7 +15,7 @@ def construct_train_time(hour, minute=0, second=0):
     return next_run_time.timestamp()
 
 
-def wait_until(next_run_time):
+def wait_until(next_run_time, check_interval=300):
     while True:
         current_time = time.time()
         print(
@@ -24,7 +24,7 @@ def wait_until(next_run_time):
         )
         if current_time >= next_run_time:
             break
-        time.sleep(300)  # 每5分钟检查一次
+        time.sleep(check_interval)  # 每5分钟检查一次
 
 
 def run_pipeline(pipeline: TrainPipeline):
@@ -530,7 +530,7 @@ def main_0815_04():
     ]
     run_pipelines(pipelines)
 
-def main_0815_05():
+def qoq_sft_one_epoch():
     global CUDA_VISIBLE_DEVICES
     base_model = "/home/qianq/model/QoQ-Med-VL-7B"
     model_type = "qwen2_5_vl"
@@ -572,12 +572,67 @@ def main_0815_05():
     run_pipelines(pipelines)
 
 
+
+def llava_med_sft_one_epoch_detail_enforce():
+    global CUDA_VISIBLE_DEVICES
+    base_model = "/home/qianq/model/llava-med-v1.5-mistral-7b"
+    model_type = "llava1_5_hf"
+    setup_logging(log_dir="logs/llava-med-sft-1epoch-detail-enforce")
+    pipelines = [
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="lidc-detail",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="attr-lidc-detail",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+    ]
+    run_pipelines(pipelines)
+
+
+def qoq_sft_one_epoch_detail_enforce():
+    global CUDA_VISIBLE_DEVICES
+    base_model = "/home/qianq/model/QoQ-Med-VL-7B"
+    model_type = "qwen2_5_vl"
+    setup_logging(log_dir="logs/QoQ-Med-VL-7B-sft-1epoch-detail-enforce")
+    pipelines = [
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="lidc-detail",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+        TrainPipeline(
+            base_model=base_model,
+            model_type=model_type,
+            epoch=1,
+            dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+            dataset_name="attr-lidc-detail",
+            cuda_devices=CUDA_VISIBLE_DEVICES,
+        ),
+    ]
+    run_pipelines(pipelines)
+
+
 if __name__ == "__main__":
     # main_0813_night()
     # main_0814()
     # main_0815_01()
     # main_0815_03()
     # main_0815_04()
-    wait_until(construct_train_time(hour=7))
+    wait_until(construct_train_time(hour=5), check_interval=600)  # 每10分钟检查一次
     CUDA_VISIBLE_DEVICES = "0,1"
-    main_0815_05()
+    qoq_sft_one_epoch()
+    llava_med_sft_one_epoch_detail_enforce()
+    qoq_sft_one_epoch_detail_enforce()
