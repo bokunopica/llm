@@ -82,7 +82,6 @@ class TrainPipeline:
         self.dataset_name = dataset_name
         self.cuda_devices = cuda_devices
         self.train_batch_size = 4 * len(self.cuda_devices.split(","))
-        
 
         # 推理相关
         self.max_batch_size = 8 * len(self.cuda_devices.split(","))
@@ -105,10 +104,10 @@ class TrainPipeline:
     def run_train(self) -> str:
         """
         运行模型训练
-        
+
         Returns:
             str: 训练输出目录路径
-            
+
         Raises:
             subprocess.CalledProcessError: 训练失败时抛出
         """
@@ -271,3 +270,21 @@ class TrainPipeline:
                 print(f"=== 定时任务结束，当前时间: {time.ctime(time.time())} ===")
                 break
             time.sleep(300)
+
+
+def run_pipeline(pipeline: TrainPipeline):
+    """运行单个训练管道"""
+    print(f"=== 开始执行 Pipeline ===")
+    try:
+        pipeline.run()
+    except Exception as e:
+        print(f"❌ 运行出错: {e}")
+    print(f"=== Pipeline 完成 ===")
+
+
+def run_pipelines(pipelines: List[TrainPipeline]):
+    """运行多个训练管道"""
+    for i, pipeline in enumerate(pipelines, start=1):
+        print(f"=== 开始执行 Pipeline {i} ===")
+        run_pipeline(pipeline)
+        print(f"=== Pipeline {i} 完成 ===")

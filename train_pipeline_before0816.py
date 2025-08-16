@@ -489,6 +489,7 @@ def main_0815_03():
     ]
     run_pipelines(pipelines)
 
+
 def main_0815_04():
     global CUDA_VISIBLE_DEVICES
     base_model = "/home/qianq/model/llava-1.5-7b-hf"
@@ -530,6 +531,7 @@ def main_0815_04():
     ]
     run_pipelines(pipelines)
 
+
 def qoq_sft_one_epoch():
     global CUDA_VISIBLE_DEVICES
     base_model = "/home/qianq/model/QoQ-Med-VL-7B"
@@ -570,7 +572,6 @@ def qoq_sft_one_epoch():
         ),
     ]
     run_pipelines(pipelines)
-
 
 
 def llava_med_sft_one_epoch_detail_enforce():
@@ -625,6 +626,25 @@ def qoq_sft_one_epoch_detail_enforce():
     run_pipelines(pipelines)
 
 
+@with_logging("logs/llava-med-sft-1epoch-detail-enforce")
+def llava_med_sft_one_epoch_detail_enforce_bugfix():
+    global CUDA_VISIBLE_DEVICES
+    base_model = "/home/qianq/model/llava-med-v1.5-mistral-7b"
+    model_type = "llava1_5_hf"
+    pipeline = TrainPipeline(
+        base_model=base_model,
+        model_type=model_type,
+        epoch=1,
+        dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
+        dataset_name="lidc-detail",
+        cuda_devices=CUDA_VISIBLE_DEVICES,
+    )
+    result_path = pipeline.run_infer(
+        "results/llava-med-v1.5-mistral-7b-EPOCH=1-LR=1e-4-DATASET=lidc-detail/v1-20250816-111715/checkpoint-162"
+    )
+    pipeline.run_eval(result_path)
+
+
 if __name__ == "__main__":
     # main_0813_night()
     # main_0814()logs
@@ -633,9 +653,11 @@ if __name__ == "__main__":
     # main_0815_04()
     # 在pipeline.txt文件中写入进程id
     import os
+
     open("train_pipeline.pid", "w").write(str(os.getpid()))
     # wait_until(construct_train_time(hour=5), check_interval=600)  # 每10分钟检查一次
     CUDA_VISIBLE_DEVICES = "1"
     # qoq_sft_one_epoch()
-    llava_med_sft_one_epoch_detail_enforce()
-    qoq_sft_one_epoch_detail_enforce()
+    # llava_med_sft_one_epoch_detail_enforce()
+    # qoq_sft_one_epoch_detail_enforce()
+    llava_med_sft_one_epoch_detail_enforce_bugfix()

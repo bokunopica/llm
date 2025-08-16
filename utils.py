@@ -1,7 +1,11 @@
 import torch.nn as nn
+import time
+from pipeline import TrainPipeline
+from typing import List
+
 
 # copy code from https://github.com/huggingface/peft/blob/2f5360a7da22a236b5ad4c059572fff5321c867c/src/peft/peft_model.py#L617
-def get_nb_trainable_parameters(model:nn.Module) -> tuple[int, int]:
+def get_nb_trainable_parameters(model: nn.Module) -> tuple[int, int]:
     r"""
     Returns the number of trainable parameters and the number of all parameters in the model.
     """
@@ -50,12 +54,36 @@ def print_trainable_parameters(model: nn.Module) -> None:
         f"trainable params: {trainable_params:,d} || all params: {all_param:,d} || trainable%: {100 * trainable_params / all_param:.4f}"
     )
 
+
 # def print_trainable_parameters(model):
 #     total = sum(p.numel() for p in model.parameters())
 #     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
 #     print(f"✅ Trainable params: {trainable:,} / {total:,} ({100 * trainable / total:.4f}%)")
-    
+
 #     print("👀 Trainable Modules:")
 #     for name, param in model.named_parameters():
 #         if param.requires_grad:
 #             print(f" - {name}: {param.numel()}")
+
+
+def construct_train_time(hour, minute=0, second=0):
+    """构造下一个训练时间的时间戳"""
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    next_run_time = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
+    if next_run_time <= now:
+        next_run_time += timedelta(days=1)
+    return next_run_time.timestamp()
+
+
+def wait_until(next_run_time, check_interval=300):
+    while True:
+        current_time = time.time()
+        print(
+            f"当前时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_time))}, "
+            f"计划运行时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(next_run_time))}"
+        )
+        if current_time >= next_run_time:
+            break
+        time.sleep(check_interval)  # 每5分钟检查一次
