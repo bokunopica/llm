@@ -1,5 +1,5 @@
 import time
-from logger import setup_logging
+from logger import setup_logging, with_logging
 from pipeline import TrainPipeline
 from typing import List
 
