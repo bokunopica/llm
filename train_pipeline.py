@@ -120,7 +120,7 @@ if __name__ == "__main__":
     open("train_pipeline.pid", "w").write(str(os.getpid()))
     # wait_until(construct_train_time(hour=5), check_interval=600)  # 每10分钟检查一次
     CUDA_VISIBLE_DEVICES = "1"
-    llava_med_sft_one_epoch_adalora_01()
+    # llava_med_sft_one_epoch_adalora_01()
 
     wait_until(construct_train_time(hour=6), check_interval=600)  # 每10分钟检查一次
     llava_med_sft_one_epoch_adalora_02()

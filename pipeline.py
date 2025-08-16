@@ -121,6 +121,14 @@ class TrainPipeline:
         else:
             self.output_prefix = ""
 
+        def build_output_dir(
+            model, epoch, lr, output_prefix, dataset_name, train_type
+        ) -> str:
+            output_dir = f"results/{os.path.basename(model)}-EPOCH={epoch}-LR={lr}-DATASET={output_prefix}{dataset_name}"
+            if train_type != "lora":
+                output_dir += f"-{self.train_type}"
+            return output_dir
+
         train_params = {
             "--model": self.model,
             "--model_type": self.model_type,
@@ -140,7 +148,14 @@ class TrainPipeline:
             "--max_length": "2048",
             "--warmup_ratio": "0.05",
             "--dataloader_num_workers": "0",
-            "--output_dir": f"results/{os.path.basename(self.model)}-EPOCH={self.epoch}-LR={self.lr}-DATASET={self.output_prefix}{self.dataset_name}",
+            "--output_dir": build_output_dir(
+                self.model,
+                self.epoch,
+                self.lr,
+                self.output_prefix,
+                self.dataset_name,
+                self.train_type,
+            ),
         }
 
         if self.train_type == "lora":
