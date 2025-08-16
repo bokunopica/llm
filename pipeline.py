@@ -103,6 +103,15 @@ class TrainPipeline:
         return env
 
     def run_train(self) -> str:
+        """
+        运行模型训练
+        
+        Returns:
+            str: 训练输出目录路径
+            
+        Raises:
+            subprocess.CalledProcessError: 训练失败时抛出
+        """
         os.environ["CUDA_VISIBLE_DEVICES"] = self.cuda_devices
         env = self._build_env()
         # 用 dict 管理参数
