@@ -640,7 +640,7 @@ def llava_med_sft_one_epoch_detail_enforce_bugfix():
         cuda_devices=CUDA_VISIBLE_DEVICES,
     )
     result_path = pipeline.run_infer(
-        "results/llava-med-v1.5-mistral-7b-EPOCH=1-LR=1e-4-DATASET=lidc-detail/v1-20250816-111715/checkpoint-162"
+        "results/llava-med-v1.5-mistral-7b-EPOCH=1-LR=1e-4-DATASET=lidc-detail"
     )
     pipeline.run_eval(result_path)
 
