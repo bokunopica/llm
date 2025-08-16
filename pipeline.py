@@ -65,6 +65,7 @@ class TrainPipeline:
         base_model,
         model_type,
         cuda_devices,
+        train_type,
         epoch=1,
         lr="1e-4",
         dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
@@ -73,6 +74,7 @@ class TrainPipeline:
         is_raw_model=False,  # 是否直接使用原始模型进行推理
     ):
         # ===== 配置区域 =====
+        self.train_type = train_type
         self.max_pixels = 1003520
         self.model = base_model
         self.model_type = model_type
@@ -118,20 +120,17 @@ class TrainPipeline:
             self.output_prefix = "nodule_img-"
         else:
             self.output_prefix = ""
+
         train_params = {
             "--model": self.model,
             "--model_type": self.model_type,
             "--dataset": f"{self.dataset_prefix}/{self.dataset_name}",
-            "--split_dataset_ratio": "0.01",
-            "--train_type": "lora",
+            "--split_dataset_ratio": "0",
             "--torch_dtype": "bfloat16",
             "--num_train_epochs": str(self.epoch),
-            "--per_device_train_batch_size": self.train_batch_size,
-            "--per_device_eval_batch_size": self.train_batch_size,
-            "--learning_rate": self.lr,
-            "--lora_rank": "8",
-            "--lora_alpha": "32",
-            "--target_modules": "all-linear",
+            "--per_device_train_batch_size": str(self.train_batch_size),
+            "--per_device_eval_batch_size": str(self.train_batch_size),
+            "--learning_rate": str(self.lr),
             "--freeze_vit": "true",
             "--gradient_accumulation_steps": "16",
             "--eval_steps": "100",
@@ -143,6 +142,34 @@ class TrainPipeline:
             "--dataloader_num_workers": "0",
             "--output_dir": f"results/{os.path.basename(self.model)}-EPOCH={self.epoch}-LR={self.lr}-DATASET={self.output_prefix}{self.dataset_name}",
         }
+
+        if self.train_type == "lora":
+            train_params.update(
+                {
+                    "--train_type": "lora",
+                    "--lora_rank": "8",
+                    "--lora_alpha": "32",
+                    "--target_modules": "all-linear",
+                }
+            )
+        elif self.train_type == "adalora":
+            train_params.update(
+                {
+                    "--train_type": "adalora",
+                    "--adalora_target_r": "8",  # 平均 rank
+                    "--adalora_init_r": "12",  # 初始 rank
+                    "--adalora_tinit": "0",  # 初始 warmup
+                    "--adalora_tfinal": "0",  # final warmup
+                    "--adalora_deltaT": "1",  # step 间隔
+                    "--adalora_beta1": "0.85",  # EMA 参数
+                    "--adalora_beta2": "0.85",  # EMA 参数
+                    "--adalora_orth_reg_weight": "0.5",  # 正则化参数
+                    "--target_modules": "all-linear",  # 继承自 lora，可修改
+                }
+            )
+        else:
+            raise ValueError(f"未知的训练类型: {self.train_type}")
+
         # 展开成列表
         train_cmd = ["swift", "sft"]
         for k, v in train_params.items():
