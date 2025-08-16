@@ -11,3 +11,5 @@ output/
 *.bak
 bak/
 *.out
+*.pid
+pipeline.txt

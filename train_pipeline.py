@@ -627,12 +627,15 @@ def qoq_sft_one_epoch_detail_enforce():
 
 if __name__ == "__main__":
     # main_0813_night()
-    # main_0814()
+    # main_0814()logs
     # main_0815_01()
     # main_0815_03()
     # main_0815_04()
-    wait_until(construct_train_time(hour=5), check_interval=600)  # 每10分钟检查一次
-    CUDA_VISIBLE_DEVICES = "0,1"
-    qoq_sft_one_epoch()
+    # 在pipeline.txt文件中写入进程id
+    import os
+    open("train_pipeline.pid", "w").write(str(os.getpid()))
+    # wait_until(construct_train_time(hour=5), check_interval=600)  # 每10分钟检查一次
+    CUDA_VISIBLE_DEVICES = "1"
+    # qoq_sft_one_epoch()
     llava_med_sft_one_epoch_detail_enforce()
     qoq_sft_one_epoch_detail_enforce()

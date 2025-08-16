@@ -64,12 +64,12 @@ class TrainPipeline:
         self,
         base_model,
         model_type,
+        cuda_devices,
         epoch=1,
         lr="1e-4",
         dataset_prefix="/home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice",
         dataset_name="attr-lidc",  # attr-lidc | lidc
         # 默认全部gpu
-        cuda_devices=None,
         is_raw_model=False,  # 是否直接使用原始模型进行推理
     ):
         # ===== 配置区域 =====
@@ -81,9 +81,11 @@ class TrainPipeline:
         self.dataset_prefix = dataset_prefix
         self.dataset_name = dataset_name
         self.cuda_devices = cuda_devices
+        self.train_batch_size = 4 * len(self.cuda_devices.split(","))
+        
 
         # 推理相关
-        self.max_batch_size = 16
+        self.max_batch_size = 8 * len(self.cuda_devices.split(","))
         self.max_new_tokens = 512
         self.temperature = 0
         self.top_p = 0.9
@@ -112,8 +114,8 @@ class TrainPipeline:
             "--train_type": "lora",
             "--torch_dtype": "bfloat16",
             "--num_train_epochs": str(self.epoch),
-            "--per_device_train_batch_size": "4",
-            "--per_device_eval_batch_size": "4",
+            "--per_device_train_batch_size": self.train_batch_size,
+            "--per_device_eval_batch_size": self.train_batch_size,
             "--learning_rate": self.lr,
             "--lora_rank": "8",
             "--lora_alpha": "32",
