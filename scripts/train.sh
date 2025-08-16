@@ -8,7 +8,7 @@ DATASET_NAME=attr-lidc \
 CUDA_VISIBLE_DEVICES=1,3 swift sft \
     --model /home/qianq/model/llava-med-v1.5-mistral-7b \
     --dataset /home/qianq/data/image-text-to-text/lidc-clf-nodule-ct-slice/${DATASET_NAME} \
-    --split_dataset_ratio 0.01 \
+    --split_dataset_ratio 0 \
     --train_type lora \
     --torch_dtype bfloat16 \
     --num_train_epochs 1 \
