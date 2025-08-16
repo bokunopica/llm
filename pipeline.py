@@ -114,6 +114,10 @@ class TrainPipeline:
         os.environ["CUDA_VISIBLE_DEVICES"] = self.cuda_devices
         env = self._build_env()
         # 用 dict 管理参数
+        if "nodule_img" in self.dataset_prefix:
+            self.output_prefix = "nodule_img-"
+        else:
+            self.output_prefix = ""
         train_params = {
             "--model": self.model,
             "--model_type": self.model_type,
@@ -137,7 +141,7 @@ class TrainPipeline:
             "--max_length": "2048",
             "--warmup_ratio": "0.05",
             "--dataloader_num_workers": "0",
-            "--output_dir": f"results/{os.path.basename(self.model)}-EPOCH={self.epoch}-LR={self.lr}-DATASET={self.dataset_name}",
+            "--output_dir": f"results/{os.path.basename(self.model)}-EPOCH={self.epoch}-LR={self.lr}-DATASET={self.output_prefix}{self.dataset_name}",
         }
         # 展开成列表
         train_cmd = ["swift", "sft"]
