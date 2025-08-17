@@ -47,6 +47,7 @@ class EmbeddingRequest(BaseModel):
 
 @app.post("/judge_answer")
 def judge_answer(req: EmbeddingRequest):
+    print("DEBUG: received request:", req.dict())
     text_embeddings = encode_texts(req.texts)
     results = []
 
@@ -60,6 +61,10 @@ def judge_answer(req: EmbeddingRequest):
     return {"results": results}
 
 
+@app.get("/")
+def hello():
+    return {"hello": "world"}
+
 # 直接用 Python 启动
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=19191)
+    uvicorn.run(app, port=19191)
