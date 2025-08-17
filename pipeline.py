@@ -83,7 +83,10 @@ class TrainPipeline:
         self.dataset_prefix = dataset_prefix
         self.dataset_name = dataset_name
         self.cuda_devices = cuda_devices
-        self.train_batch_size = 4 * len(self.cuda_devices.split(","))
+        if train_type == "adalora":
+            self.train_batch_size = 2 * len(self.cuda_devices.split(","))
+        else:
+            self.train_batch_size = 4 * len(self.cuda_devices.split(","))
 
         # 推理相关
         self.max_batch_size = 8 * len(self.cuda_devices.split(","))

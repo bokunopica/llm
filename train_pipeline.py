@@ -90,7 +90,7 @@ def llava_med_sft_one_epoch_adalora_02():
 def qoq_med_vl_7b_sft_one_epoch_adalora():
     global CUDA_VISIBLE_DEVICES
     base_model = "/home/qianq/model/QoQ-Med-VL-7B"
-    model_type = "llava1_5_hf"
+    model_type = "qwen2_5_vl"
     pipelines = [
         TrainPipeline(
             base_model=base_model,
@@ -116,12 +116,6 @@ def qoq_med_vl_7b_sft_one_epoch_adalora():
 
 if __name__ == "__main__":
     import os
-
     open("train_pipeline.pid", "w").write(str(os.getpid()))
-    # wait_until(construct_train_time(hour=5), check_interval=600)  # 每10分钟检查一次
-    CUDA_VISIBLE_DEVICES = "1"
-    # llava_med_sft_one_epoch_adalora_01()
-
-    wait_until(construct_train_time(hour=6), check_interval=600)  # 每10分钟检查一次
-    llava_med_sft_one_epoch_adalora_02()
+    CUDA_VISIBLE_DEVICES = "1,3"
     qoq_med_vl_7b_sft_one_epoch_adalora()
